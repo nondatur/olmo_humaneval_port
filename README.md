@@ -62,21 +62,11 @@ Then, you can use the following command to compute the evaluation metrics and ag
 python compute_metrics.py
 ```
 
-## Tulu 1 Annotation Results
+## Annotation Results
 
-We release the annotations that we collected for the Tulu 1 paper in `data/eval_annotations_tulu_1.xlsx`. The results include comparison of three models pairs: Tulu 65B vs ChatGPT, Tulu 65B vs Tulu 7B, and Tulu 65B vs Tulu (human only) 65B.
+The results in `data/eval_annotations_tulu_1.xlsx` include comparison of three models pairs: Tulu 65B vs ChatGPT, Tulu 65B vs Tulu 7B, and Tulu 65B vs Tulu (human only) 65B.
 
-## Citation
+## Notes
 
-If you used this code, please cite our paper:
-
-```bibtex
-@misc{wang2023far,
-   title={How Far Can Camels Go? Exploring the State of Instruction Tuning on Open Resources}, 
-   author={Yizhong Wang and Hamish Ivison and Pradeep Dasigi and Jack Hessel and Tushar Khot and Khyathi Raghavi Chandu and David Wadden and Kelsey MacMillan and Noah A. Smith and Iz Beltagy and Hannaneh Hajishirzi},
-   year={2023},
-   eprint={2306.04751},
-   archivePrefix={arXiv},
-   primaryClass={cs.CL}
-}
-```
+- This repository is derived from [Allen AI's Open Instruct project](https://github.com/allenai/open-instruct) (`human_eval`)
+- The original license is Apache 2.0
