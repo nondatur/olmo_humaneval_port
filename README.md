@@ -42,9 +42,11 @@ You can open the app in your browser at http://localhost:5001. When doing the an
 
 Here is a screenshot of the annotation interface:
 
-<p align="center" width="100%">
-      <img src="screenshot.png" alt="Screenshot of the human evaluation interface." style="width: 80%; display: block; margin: auto;">
-</p>
+<center>
+
+   ![image](./screenshot.png =850x600)
+
+</center>
 
 ## Post-processing and Analysis
 
