@@ -1,0 +1,68 @@
+# Reference: https://learn.microsoft.com/en-us/azure/devops/pipelines/repos/azure-repos-git?view=azure-devops&tabs=yaml
+
+name: Build container and upload to artifact registry 'experimental-cloud-runs' at project 'ib-ibaic-dev-eed3'
+
+resources:
+  - repo: self
+    fetchDepth: 1
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  - name: NO_SQ_SCAN
+    value: true
+  - name: projectId
+    value: "ib-ibaic-dev-eed3"
+  - name: projectRegion
+    value: "europe-west3"
+  - name: image
+    value: "ibaic-ner-service"
+  - name: imageTag
+    value: "$(Build.BuildId)"
+  - name: containerRegistryLoc
+    value: "${{variables.projectRegion}}-docker.pkg.dev"
+  - name: containerRegistry
+    value: "${{variables.projectRegion}}-docker.pkg.dev/${{variables.projectId}}/experimental-cloud-runs"
+  - name: serviceAccount
+    value: "sa-cicd@ib-ibaic-tools-b09b.iam.gserviceaccount.com"
+
+trigger:
+  batch: true
+  branches:
+    include:
+      - dev
+
+stages:
+- stage: BuildAndPush
+  jobs:
+  - job: DockerPush
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+
+    - task: DownloadSecureFile@1
+      displayName: Download SA key file
+      name: saKeyFile
+      inputs:
+        secureFile: key--sa-cicd.json
+
+    - task: DockerInstaller@0
+      inputs:
+        dockerVersion: '24.0.5'
+
+    - script: |
+        gcloud auth activate-service-account --key-file="$(saKeyFile.secureFilePath)"
+        echo -e "\n** Show auth details ..."
+        gcloud auth list --filter="status: active"
+        echo -e "\n** Setting up registry '${{variables.containerRegistryLoc}}' ..."
+        gcloud auth configure-docker ${{variables.containerRegistryLoc}} --quiet
+      displayName: 'Authenticate with GCP'
+
+    - script: |
+        docker build -t ${{variables.containerRegistry}}/${{variables.image}}:${{variables.imageTag}} .
+      displayName: 'Build Docker image'
+
+    - script: |
+        docker push ${{variables.containerRegistry}}/${{variables.image}}:${{variables.imageTag}}
+      displayName: 'Push Docker image to artifact registry'
