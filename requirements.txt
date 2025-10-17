@@ -1,0 +1,6 @@
+flask
+flask-sqlalchemy
+flask-login
+#pytest
+#pytest-flask
+#pytest-cov
