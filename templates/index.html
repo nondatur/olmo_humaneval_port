@@ -181,9 +181,14 @@
 </body>
 
 <script type="text/javascript">
-    var instance_index = "{{ index }}";
-    var is_authenticated = "{{ 'true' if current_user.is_authenticated else 'false' }}";
-    var username = "{{ current_user.username if current_user.is_authenticated else '' }}";
+    var instance_index = {{ index }};
+    {% if current_user.is_authenticated %}
+        var is_authenticated = true;
+        var username = "{{ current_user.username }}";
+    {% else %}
+        var is_authenticated = false;
+        var username = "";
+    {% endif %}
 </script>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 
