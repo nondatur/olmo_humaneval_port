@@ -31,7 +31,7 @@ trigger:
   batch: true
   branches:
     include:
-      - main
+      - master
 
 stages:
 - stage: BuildAndPush
