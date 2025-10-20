@@ -23,10 +23,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY . .
+COPY . /app
 
 # Create data directory for SQLite database
-RUN mkdir -p /app/data
+# RUN mkdir -p /app/data
 
 # Create a non-root user for security
 RUN adduser --disabled-password --gecos '' appuser \
