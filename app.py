@@ -121,8 +121,6 @@ def summary():
     return jsonify(results), 200
 
 
-
-
 def count_user_contributions(users, records):
     user_contributions = {}
     for user in users:
