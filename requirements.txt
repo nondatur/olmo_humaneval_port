@@ -1,6 +1,8 @@
 flask
 flask-sqlalchemy
 flask-login
+pandas
+openpyxl
 #pytest
 #pytest-flask
 #pytest-cov
