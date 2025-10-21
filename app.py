@@ -10,11 +10,14 @@ from flask_login import LoginManager, UserMixin, current_user, login_required, l
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import check_password_hash, generate_password_hash
 
+import logging
+log = logging.getLogger('human-eval')
+
 random.seed(42)
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(os.getcwd(), 'data', 'evaluation.db')
-print(app.config['SQLALCHEMY_DATABASE_URI'])
+log.info(app.config['SQLALCHEMY_DATABASE_URI'])
 app.config['SECRET_KEY'] = '123456' # replace with a real secret key
 
 db = SQLAlchemy(app)
@@ -208,9 +211,9 @@ def get_comparison_results(records, target_model_a, target_model_b):
         elif record.preference == "tie":
             comparison_results[instance_id].append("tie")
         else:
-            print("-------------------------------------")
-            print("Unknown preference value.")
-            print(record)
+            log.warning("-------------------------------------")
+            log.warning("Unknown preference value.")
+            log.warning(record)
 
     # thre can be multiple annotations for each instance; use the latest comparison result for each instance
     latest_comparison_results = [results[-1] for _, results in comparison_results.items()]
@@ -244,8 +247,8 @@ def get_comparison_results(records, target_model_a, target_model_b):
                 elif target_model_b in comparison_result:
                     simplified_comparisons.append(target_model_b)
                 else:
-                    print("Unknown comparison result.")
-                    print(comparison_result)
+                    log.warning("Unknown comparison result.")
+                    log.warning(comparison_result)
             if len(set(simplified_comparisons[-2:])) == 1:
                 agreed_comparison += 1
                 relexed_agreed_comparison += 1
@@ -311,8 +314,8 @@ def summarize_results():
 @login_required
 def submit_evaluation():
     evaluation_data = request.get_json()
-    print("Got new evaluation data:")
-    print(evaluation_data)
+    log.info("Got new evaluation data:")
+    log.info(evaluation_data)
     # write to the database
     new_record = EvaluationRecord(
         instance_index=evaluation_data["index"],
@@ -339,8 +342,8 @@ def submit_evaluation():
 @login_required
 def submit_feedback():
     feedback_data = request.get_json()
-    print("Got new feedback:")
-    print(feedback_data)
+    log.info("Got new feedback:")
+    log.info(feedback_data)
     # write to the database
     new_record = EvaluationRecord(
         instance_index=feedback_data["index"],
@@ -403,7 +406,7 @@ def main():
     with open(args.comparison_data_path, "r") as f:
         COMPARISON_INSTANCES = [json.loads(line.strip()) for line in f.readlines()]
 
-    print("Total number of comparison instances: {}".format(len(COMPARISON_INSTANCES)))
+    log.info("Total number of comparison instances: {}".format(len(COMPARISON_INSTANCES)))
 
     # run the app and listen on port 5000
     app.run(host=args.host, port=args.port, debug=args.debug)
