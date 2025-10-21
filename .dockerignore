@@ -1,3 +1,6 @@
+# Custom
+data/*.db
+
 # Git
 .git
 .gitignore
