@@ -233,7 +233,3 @@ class TestAppInitialization:
                     # The test ensures the data loading part works
                 except SystemExit:
                     pass  # main() calls sys.exit(), which is expected in testing
-
-
-#if __name__ == '__main__':
-#    pytest.main([__file__])

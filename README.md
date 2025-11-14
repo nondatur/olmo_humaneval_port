@@ -5,7 +5,7 @@ This folder contains the code for the human eval annotation interface used in th
 ## Installation
 
 ```bash
-conda create -n human_eval python=3.10
+conda create -n human_eval python=3.11
 conda activate human_eval
 pip install -r requirements.txt
 ```
@@ -33,9 +33,13 @@ Each line of this file should be in the following format:
 ```
 
 Now you can run the app with:
-
 ```bash
-python app.py
+python app.py --comparison_data_path data/your_data_file.jsonl --host 0.0.0.0 --port 5001
+```
+
+Or, in debug mode:
+```bash
+python app.py --comparison_data_path data/your_data_file.jsonl --host 0.0.0.0 --port 5001 --debug
 ```
 
 You can open the app in your browser at http://localhost:5001. When doing the annotation, you can track the progress at the following url: http://localhost:5001/summary.
