@@ -66,10 +66,6 @@ Then, you can use the following command to compute the evaluation metrics and ag
 python compute_metrics.py
 ```
 
-## Annotation Results
-
-The results in `data/eval_annotations_tulu_1.xlsx` include comparison of three models pairs: Tulu 65B vs ChatGPT, Tulu 65B vs Tulu 7B, and Tulu 65B vs Tulu (human only) 65B.
-
 ## Notes
 
 - This repository is derived from [Allen AI's Open Instruct project](https://github.com/allenai/open-instruct) (`human_eval`)
