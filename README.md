@@ -77,3 +77,5 @@ pytest -v tests/human_eval_tests.py
 
 - This repository is derived from [Allen AI's Open Instruct project](https://github.com/allenai/open-instruct) (`human_eval`)
 - The original license is Apache 2.0
+- To build the container, check its [Docker](DOCKER.md) documentation
+- Upload to artifactory will be triggered by pushes to the `master` branch (including PRs)
