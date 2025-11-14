@@ -22,7 +22,7 @@ docker run -p 5001:5001 -v $(pwd)/data:/app/data human-eval-olmo \
 ### Development Mode with Debug
 ```bash
 docker run -p 5001:5001 -v $(pwd):/app human-eval-olmo \
-    python app.py --comparison_data_path data/eval_instances_tulu_1.jsonl --host 0.0.0.0 --port 5001 --debug
+    python app.py --comparison_data_path data/your_data_file.jsonl --host 0.0.0.0 --port 5001 --debug
 ```
 
 ## Docker Compose (Alternative)
