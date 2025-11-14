@@ -66,6 +66,13 @@ Then, you can use the following command to compute the evaluation metrics and ag
 python compute_metrics.py
 ```
 
+## Tests
+
+To run the unit tests, type:
+```bash
+pytest -v tests/human_eval_tests.py
+```
+
 ## Notes
 
 - This repository is derived from [Allen AI's Open Instruct project](https://github.com/allenai/open-instruct) (`human_eval`)
