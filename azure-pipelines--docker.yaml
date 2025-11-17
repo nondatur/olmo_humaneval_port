@@ -34,12 +34,46 @@ trigger:
       - master
 
 stages:
-- stage: BuildAndPush
+- stage: TestBuildAndPush
   jobs:
-  - job: DockerPush
+
+  - job: TestCompile
+    displayName: 'Run tests, compile and upload to GCP'
     pool:
       vmImage: 'ubuntu-latest'
+      matrix:
+        python311:
+          python.version: '3.11'
+
     steps:
+
+    - task: UsePythonVersion@0
+      displayName: 'Use Python $(python.version)'
+      inputs:
+          versionSpec: '$(python.version)'  
+
+    - script: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+      displayName: "Installing dependencies"
+
+    - script: |
+       pytest -v --cov app.py --junitxml=test-results.xml --cov-report=xml tests/human_eval_tests.py
+      displayName: 'Running unit tests'
+
+    - task: PublishTestResults@2
+      condition: succeededOrFailed()
+      inputs:
+          testResultsFiles: "**/test-results.xml"
+          testRunTitle: "Python Tests"
+      displayName: "Publishing test results"
+
+    - task: PublishCodeCoverageResults@2
+      inputs:
+          codeCoverageTool: Cobertura
+          summaryFileLocation: "$(System.DefaultWorkingDirectory)/**/coverage.xml"
+          reportDirectory: "$(System.DefaultWorkingDirectory)/**/htmlcov"
+      displayName: "Publishing coverage report"
 
     - task: DownloadSecureFile@1
       displayName: Download SA key file
@@ -48,6 +82,7 @@ stages:
         secureFile: key--sa-cicd.json
 
     - task: DockerInstaller@0
+      displayName: 'Intalling Docker'
       inputs:
         dockerVersion: '24.0.5'
 

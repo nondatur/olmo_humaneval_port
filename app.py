@@ -282,9 +282,10 @@ def summarize_results():
         feedback_records = {}
         comparison_records = []
         for record in records:
+            
             # instance id is used to identify the comparison instance
             # there could be multiple records for the same instance
-            instance_id = record.instance_id
+            # instance_id = record.instance_id
 
             # skip if the record is not for the target model pair
             if set([target_model_a, target_model_b]) != set([record.model_a, record.model_b]):

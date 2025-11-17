@@ -5,7 +5,7 @@ This folder contains the code for the human eval annotation interface used in th
 ## Installation
 
 ```bash
-conda create -n human_eval python=3.10
+conda create -n human_eval python=3.11
 conda activate human_eval
 pip install -r requirements.txt
 ```
@@ -33,9 +33,13 @@ Each line of this file should be in the following format:
 ```
 
 Now you can run the app with:
-
 ```bash
-python app.py
+python app.py --comparison_data_path data/your_data_file.jsonl --host 0.0.0.0 --port 5001
+```
+
+Or, in debug mode:
+```bash
+python app.py --comparison_data_path data/your_data_file.jsonl --host 0.0.0.0 --port 5001 --debug
 ```
 
 You can open the app in your browser at http://localhost:5001. When doing the annotation, you can track the progress at the following url: http://localhost:5001/summary.
@@ -62,11 +66,16 @@ Then, you can use the following command to compute the evaluation metrics and ag
 python compute_metrics.py
 ```
 
-## Annotation Results
+## Tests
 
-The results in `data/eval_annotations_tulu_1.xlsx` include comparison of three models pairs: Tulu 65B vs ChatGPT, Tulu 65B vs Tulu 7B, and Tulu 65B vs Tulu (human only) 65B.
+To run the unit tests, type:
+```bash
+pytest -v tests/human_eval_tests.py
+```
 
 ## Notes
 
 - This repository is derived from [Allen AI's Open Instruct project](https://github.com/allenai/open-instruct) (`human_eval`)
 - The original license is Apache 2.0
+- To build the container, check its [Docker](DOCKER.md) documentation
+- Upload to artifactory will be triggered by pushes to the `master` branch (including PRs)
