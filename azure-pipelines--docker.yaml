@@ -16,6 +16,9 @@ variables:
     value: "ib-ibaic-dev-eed3"
   - name: projectRegion
     value: "europe-west3"
+  - name: pythonVersion
+    type: string
+    default: '3.13'
   - name: image
     value: "ibaic-human-eval"
   - name: imageTag
@@ -41,16 +44,14 @@ stages:
     displayName: 'Run tests, compile and upload to GCP'
     pool:
       vmImage: 'ubuntu-latest'
-      matrix:
-        python311:
-          python.version: '3.11'
 
     steps:
 
     - task: UsePythonVersion@0
-      displayName: 'Use Python $(python.version)'
       inputs:
-          versionSpec: '$(python.version)'  
+        versionSpec: ${{ parameters.pythonVersion }}
+        addToPath: true
+      displayName: 'Use Python ${{ parameters.pythonVersion }}'
 
     - script: |
         python -m pip install --upgrade pip
@@ -96,8 +97,8 @@ stages:
 
     - script: |
         docker build -t ${{variables.containerRegistry}}/${{variables.image}}:${{variables.imageTag}} .
-      displayName: 'Build Docker image'
+      displayName: 'Building Docker image'
 
     - script: |
         docker push ${{variables.containerRegistry}}/${{variables.image}}:${{variables.imageTag}}
-      displayName: 'Push Docker image to artifact registry'
+      displayName: 'Pushing Docker image to artifact registry'
