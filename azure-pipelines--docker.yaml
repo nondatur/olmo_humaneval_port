@@ -17,7 +17,6 @@ variables:
   - name: projectRegion
     value: "europe-west3"
   - name: pythonVersion
-    type: string
     default: '3.13'
   - name: image
     value: "ibaic-human-eval"
@@ -49,9 +48,9 @@ stages:
 
     - task: UsePythonVersion@0
       inputs:
-        versionSpec: ${{ parameters.pythonVersion }}
+        versionSpec: ${{ variables.pythonVersion }}
         addToPath: true
-      displayName: 'Use Python ${{ parameters.pythonVersion }}'
+      displayName: 'Use Python ${{ variables.pythonVersion }}'
 
     - script: |
         python -m pip install --upgrade pip
