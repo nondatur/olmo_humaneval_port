@@ -58,12 +58,13 @@ stages:
       displayName: "Installing dependencies"
 
     - script: |
-       pytest -v --cov app.py --junitxml=test-results.xml --cov-report=xml tests/human_eval_tests.py
+        pytest -v tests/human_eval_tests.py --cov . --junitxml=test-results.xml --cov-report=xml
       displayName: 'Running unit tests'
 
     - task: PublishTestResults@2
       condition: succeededOrFailed()
       inputs:
+          testResultsFormat: 'JUnit'
           testResultsFiles: "**/test-results.xml"
           testRunTitle: "Python Tests"
       displayName: "Publishing test results"
