@@ -57,6 +57,31 @@ stages:
         pip install -r requirements.txt
       displayName: "Installing dependencies"
 
+    # Install flake8 + SARIF plugin
+    - script: |
+        pip install flake8 flake8-sarif
+      displayName: "Install linting tools"
+
+    # Run flake8 with SARIF output
+    - script: |
+        echo "Running flake8..."
+        flake8 --format sarif --output-file flake8-results.sarif .
+      displayName: "Run flake8 and generate SARIF report"
+
+    # Publish SARIF to Azure DevOps (visually displayed in the UI)
+    - task: PublishBuildArtifacts@1
+      displayName: "Publish SARIF artifact"
+      inputs:
+        PathtoPublish: "flake8-results.sarif"
+        ArtifactName: "CodeAnalysisLogs"
+
+    # Publish Code Analysis
+    - task: PublishCodeAnalysisResults@1
+      displayName: "Publish code analysis (SARIF)"
+      inputs:
+        CodeAnalysisTool: "Sarif"
+        SarifFile: "flake8-results.sarif"
+
     - script: |
         pytest -v tests/human_eval_tests.py --cov . --junitxml=test-results.xml --cov-report=xml
       displayName: 'Running unit tests'
