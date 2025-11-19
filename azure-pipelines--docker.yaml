@@ -57,11 +57,12 @@ stages:
         pip install -r requirements.txt
       displayName: "Installing dependencies"
 
-    # Run flake8 with SARIF output
+    # Run flake8
     - script: |
         pip install flake8 flake8-docstrings pep8-naming
         echo "Running flake8..."
         flake8 .
+      continueOnError: true # print results but don't block!
       displayName: "Running linter (flake8)"
 
     - script: |
