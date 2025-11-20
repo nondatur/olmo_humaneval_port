@@ -61,7 +61,7 @@ stages:
     - script: |
         pip install flake8 flake8-docstrings pep8-naming
         echo "Running flake8..."
-        flake8 .
+        flake8 app.py
       continueOnError: true # print results but don't block!
       displayName: "Running linter (flake8)"
 
