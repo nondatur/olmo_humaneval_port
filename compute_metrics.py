@@ -1,6 +1,6 @@
 import json
 from collections import Counter
-
+import argparse
 import pandas as pd
 
 
@@ -121,7 +121,18 @@ def get_comparison_results(records, target_model_a, target_model_b):
     return model_wins_rates
 
 if __name__ == "__main__":
-    annotations = pd.read_excel("data/eval_annotations.xlsx", header=0)
+
+    parser = argparse.ArgumentParser(
+        description="Load results Excel sheet and compute IAA metrics."
+    )
+
+    parser.add_argument(
+        "file",
+        help="Path to the exported annotations file (Excel .xlsx sheet)"
+    )
+
+    args = parser.parse_args()
+    annotations = pd.read_excel(args.file, header=0)
     print("Num of annotations: {}".format(len(annotations)))
 
     instance_annotators = {}
