@@ -2,10 +2,12 @@ import argparse
 import json
 import os
 import random
-import time
+import time, sqlite3
+from io import BytesIO
+import pandas as pd
 from collections import Counter
 
-from flask import Flask, jsonify, redirect, render_template, request, url_for
+from flask import Flask, jsonify, redirect, render_template, request, url_for, make_response
 from flask_login import LoginManager, UserMixin, current_user, login_required, login_user, logout_user
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -124,6 +126,33 @@ def summary():
     return jsonify(results), 200
 
 
+@app.route("/export_results", methods=["GET"])
+@login_required
+def export():
+
+    # Database connection
+    DATABASE = "data/evaluation.db"
+    DB_CONN = sqlite3.connect(DATABASE, check_same_thread=False)
+    #DB_CURSOR = DB_CONN.cursor()
+
+    # Export the evaluation results as excel
+    df = pd.read_sql_query("SELECT * from evaluation_record", DB_CONN)
+
+    # Write Excel file to an in-memory buffer
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Sheet1")
+    output.seek(0)
+
+    # Build a response with the xlsx file
+    response = make_response(output.read())
+    response.headers["Content-Disposition"] = "attachment; filename=mm_evaluation_data.xlsx"
+    response.headers["Content-Type"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+    # Return the response
+    return response, 200
+
+
 def count_user_contributions(users, records):
     user_contributions = {}
     for user in users:
@@ -215,11 +244,14 @@ def get_comparison_results(records, target_model_a, target_model_b):
             log.warning("Unknown preference value.")
             log.warning(record)
 
-    # thre can be multiple annotations for each instance; use the latest comparison result for each instance
-    latest_comparison_results = [results[-1] for _, results in comparison_results.items()]
+    # there can be multiple annotations for each instance
+    # use the latest comparison result for each instance
+    latest_comparison_results = [results[-1] for _,
+                                 results in comparison_results.items()]
     model_wins_counter = Counter(latest_comparison_results)
     model_wins_rates = {
-        result: count / len(latest_comparison_results) for result, count in model_wins_counter.items()
+        result: count / len(latest_comparison_results) for result,
+        count in model_wins_counter.items()
     }
     # merge the clearly better and slightly better results
     model_wins_rates[f"{target_model_a}_wins"] = \
@@ -228,12 +260,14 @@ def get_comparison_results(records, target_model_a, target_model_b):
         sum([v for k, v in model_wins_rates.items() if target_model_b in k])
 
     # count how many instances get multiple annotations
-    instances_with_multiple_annotations = [instance_id for instance_id, results in comparison_results.items() if len(results) > 1]
-    agreement_results = {
-        "num_instances_with_multiple_annotations": len(instances_with_multiple_annotations),
-        "comparison_agreement": None,
-        "relexed_comparison_agreement": None,
-    }
+    instances_with_multiple_annotations = [
+                instance_id for instance_id,
+                results in comparison_results.items() if len(results) > 1]
+    agreement_results = {"num_instances_with_multiple_annotations":
+                         len(instances_with_multiple_annotations),
+                         "comparison_agreement": None,
+                         "relexed_comparison_agreement": None,
+                         }
     if instances_with_multiple_annotations:
         agreed_comparison = 0
         relexed_agreed_comparison = 0
@@ -255,8 +289,10 @@ def get_comparison_results(records, target_model_a, target_model_b):
             else:
                 if "tie" in simplified_comparisons[-2:]:
                     relexed_agreed_comparison += 0.5
-        agreement_results["comparison_agreement"] = agreed_comparison / len(instances_with_multiple_annotations)
-        agreement_results["relexed_comparison_agreement"] = relexed_agreed_comparison / len(instances_with_multiple_annotations)
+        agreement_results["comparison_agreement"] = (agreed_comparison /
+                                                     len(instances_with_multiple_annotations))
+        agreement_results["relexed_comparison_agreement"] = (relexed_agreed_comparison /
+                                                             len(instances_with_multiple_annotations))
 
     model_wins_rates["agreement"] = agreement_results
     return model_wins_rates
@@ -282,7 +318,7 @@ def summarize_results():
         feedback_records = {}
         comparison_records = []
         for record in records:
-            
+
             # instance id is used to identify the comparison instance
             # there could be multiple records for the same instance
             # instance_id = record.instance_id
@@ -301,8 +337,10 @@ def summarize_results():
 
             comparison_records.append(record)
 
-        acceptance_results = get_acceptance_results(comparison_records, target_model_a, target_model_b)
-        comparison_results = get_comparison_results(comparison_records, target_model_a, target_model_b)
+        acceptance_results = get_acceptance_results(comparison_records, 
+                                                    target_model_a, target_model_b)
+        comparison_results = get_comparison_results(comparison_records, 
+                                                    target_model_a, target_model_b)
         results["results"][f"{target_model_a}_vs_{target_model_b}"] = {
             "acceptance_results": acceptance_results,
             "comparison_results": comparison_results,
