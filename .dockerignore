@@ -1,5 +1,5 @@
-# Custom
-data/*.db
+# Custom - exclude entire data directory since it will be mounted from GCS
+data/
 
 # Git
 .git

@@ -9,6 +9,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV FLASK_APP=app.py
 ENV FLASK_ENV=production
+ENV DATA_PATH=/app/data
 
 # Copy requirements first to leverage Docker cache
 COPY requirements.txt .
@@ -16,8 +17,11 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip --timeout=1000 install --trusted-host pypi.python.org --trusted-host pypi.org --trusted-host=files.pythonhosted.org --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy application code (excluding data directory which will be mounted)
 COPY . /app
+
+# Create data directory for GCS mount point
+RUN mkdir -p /app/data
 
 # Expose port 5001 (default port from the app)
 EXPOSE 5001
