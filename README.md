@@ -57,13 +57,13 @@ Here is a screenshot of the annotation interface:
 The annotation results are saved in a database file `data/evaluation.db` by default. You can use the following command to export the results to an excel file:
 
 ```bash
-python export_db.py
+python export_db.py data/eval_annotations.xlsx
 ```
 
 Then, you can use the following command to compute the evaluation metrics and agreements:
 
 ```bash
-python compute_metrics.py
+python compute_metrics.py data/eval_annotations.xlsx
 ```
 
 ## Tests
