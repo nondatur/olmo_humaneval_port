@@ -9,7 +9,6 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV FLASK_APP=app.py
 ENV FLASK_ENV=production
-ENV DATA_PATH=/app/data
 
 # Copy requirements first to leverage Docker cache
 COPY requirements.txt .
@@ -27,8 +26,8 @@ RUN mkdir -p /app/data
 EXPOSE 5001
 
 # Health check using the main route
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5001/')" || exit 1
+#HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+#    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5001/')" || exit 1
 
 # Default command - requires comparison_data_path to be provided
 CMD ["python", "app.py", "--comparison_data_path", "data/eval_instances_mm_base.jsonl", "--host", "0.0.0.0", "--port", "5001"]
