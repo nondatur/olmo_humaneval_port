@@ -6,3 +6,4 @@ openpyxl
 pytest
 pytest-flask
 pytest-cov
+matplotlib

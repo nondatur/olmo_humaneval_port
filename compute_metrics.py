@@ -2,6 +2,7 @@ import json
 from collections import Counter
 import argparse
 import pandas as pd
+from matplotlib import pyplot as plt
 
 
 def get_acceptance_results(records, target_model_a, target_model_b):
@@ -120,19 +121,8 @@ def get_comparison_results(records, target_model_a, target_model_b):
     model_wins_rates["agreement"] = agreement_results
     return model_wins_rates
 
-if __name__ == "__main__":
-
-    parser = argparse.ArgumentParser(
-        description="Load results Excel sheet and compute IAA metrics."
-    )
-
-    parser.add_argument(
-        "file",
-        help="Path to the exported annotations file (Excel .xlsx sheet)"
-    )
-
-    args = parser.parse_args()
-    annotations = pd.read_excel(args.file, header=0)
+def summarize_results(in_path, out_path):
+    annotations = pd.read_excel(in_path, header=0)
     print("Num of annotations: {}".format(len(annotations)))
 
     instance_annotators = {}
@@ -187,7 +177,7 @@ if __name__ == "__main__":
         for record in deduplicated_records:
             # instance id is used to identify the comparison instance
             # there could be multiple records for the same instance
-            instance_id = record.instance_id
+            # instance_id = record.instance_id
 
             # skip if the record is not for the target model pair
             if set([target_model_a, target_model_b]) != set([record.model_a, record.model_b]):
@@ -202,7 +192,110 @@ if __name__ == "__main__":
             "acceptance_results": acceptance_results,
             "comparison_results": comparison_results,
         }
+
     print("Results:")
     for model_pair, result in results.items():
         print(model_pair)
         print(json.dumps(result, indent=4))
+
+    with open(out_path, "w") as f:
+        json.dump(results, f, indent=4)
+
+    return results
+
+
+def plot_acceptance(results, out_path):
+    """Plot the results and save to out_path."""
+    # Plot acceptance rates
+    acceptance_data = []
+    for model_pair, result in results.items():
+        acceptance_data.append({
+            "model_pair": model_pair,
+            "model": list(result["acceptance_results"].keys())[0],
+            "acceptance_rate": result["acceptance_results"][list(result["acceptance_results"].keys())[0]],
+        })
+        acceptance_data.append({
+            "model_pair": model_pair,
+            "model": list(result["acceptance_results"].keys())[1],
+            "acceptance_rate": result["acceptance_results"][list(result["acceptance_results"].keys())[1]],
+        })
+    acceptance_df = pd.DataFrame(acceptance_data)
+
+    plt.figure(figsize=(10, 6))
+    colors = ['r', 'b']
+    for _, model_pair in enumerate(acceptance_df["model_pair"].unique()):
+        subset = acceptance_df[acceptance_df["model_pair"] == model_pair]
+        plt.bar(subset["model"], subset["acceptance_rate"], label=model_pair, color=colors)
+    plt.ylabel("Acceptance Rate")
+    plt.title("Model Acceptance Rates by Model Pair")
+    plt.ylim(0, 1.15)
+    plt.legend(handles=[],
+               title='IAA (alpha): ' + ", ".join([f"{model_pair}: {results[model_pair]['acceptance_results']['agreement']['acceptance_agreement']:.2f}" for model_pair in results.keys()]), loc='upper center')
+    plt.xticks(rotation=90)
+    plt.savefig(f"{out_path}_acceptance_rates.png",  bbox_inches='tight')
+    plt.close()
+
+
+def plot_comparison(results, out_path):
+    """Plot the results and save to out_path."""
+    # Plot acceptance rates
+    comparison_data = []
+    for model_pair, result in results.items():
+        comparison_data.append({
+            "model_pair": model_pair,
+            "model": list(result["comparison_results"].keys())[0],
+            "preference": result["comparison_results"][list(result["comparison_results"].keys())[0]],
+        })
+        comparison_data.append({
+            "model_pair": model_pair,
+            "model": list(result["comparison_results"].keys())[1],
+            "preference": result["comparison_results"][list(result["comparison_results"].keys())[1]],
+        })
+        comparison_data.append({
+            "model_pair": model_pair,
+            "model": list(result["comparison_results"].keys())[2],
+            "preference": result["comparison_results"][list(result["comparison_results"].keys())[2]],
+        })
+        comparison_data.append({
+            "model_pair": model_pair,
+            "model": list(result["comparison_results"].keys())[3],
+            "preference": result["comparison_results"][list(result["comparison_results"].keys())[3]],
+        })
+        comparison_data.append({
+            "model_pair": model_pair,
+            "model": list(result["comparison_results"].keys())[4],
+            "preference": result["comparison_results"][list(result["comparison_results"].keys())[4]],
+        })
+    comparison_df = pd.DataFrame(comparison_data)
+
+    plt.figure(figsize=(10, 6))
+    colors = ['r', 'b', 'g', 'c', 'm']
+    for _, model_pair in enumerate(comparison_df["model_pair"].unique()):
+        subset = comparison_df[comparison_df["model_pair"] == model_pair]
+        plt.bar(subset["model"], subset["preference"], label=model_pair, color=colors)
+    plt.ylabel("Preference Rate")
+    plt.title("Model Preferences by Model Pair")
+    plt.ylim(0, 1)
+    plt.legend(handles=[],
+        title="Relaxed IAA (alpha): " + ", ".join([f"{model_pair}: {results[model_pair]['comparison_results']['agreement']['relexed_comparison_agreement']:.2f}" for model_pair in results.keys()]), loc='upper center')
+    plt.xticks(rotation=90)
+    plt.savefig(f"{out_path}_comparison_preferences.png",  bbox_inches='tight')
+    plt.close()
+
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser(
+        description="Load results Excel sheet and compute IAA metrics."
+    )
+
+    parser.add_argument(
+        "file",
+        help="Path to the exported annotations file (Excel .xlsx sheet)"
+    )
+
+    args = parser.parse_args()
+
+    results = summarize_results(args.file, args.file.replace('.xlsx', '_results.json'))
+    plot_acceptance(results, args.file.replace('.xlsx', ''))
+    plot_comparison(results, args.file.replace('.xlsx', ''))
