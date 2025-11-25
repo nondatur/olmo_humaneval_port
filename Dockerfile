@@ -20,7 +20,7 @@ RUN pip --timeout=1000 install --trusted-host pypi.python.org --trusted-host pyp
 COPY . /app
 
 # Create data directory for GCS mount point
-RUN mkdir -p /app/data
+# RUN ln -s /tmp/ibaic-genai-data /tmp/data
 
 # Verify that the data directory exists/was mounted
 COPY entrypoint.sh /entrypoint.sh

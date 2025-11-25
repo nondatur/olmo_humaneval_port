@@ -123,7 +123,12 @@ def get_comparison_results(records, target_model_a, target_model_b):
 
 def summarize_results(in_path, out_path):
     annotations = pd.read_excel(in_path, header=0)
-    print("Num of annotations: {}".format(len(annotations)))
+
+    num_anns = len(annotations)
+    num_evals = len(set(annotations["evaluator"].tolist()))
+
+    print("Num of annotations: {}".format(num_anns))
+    print("Num of evaluators: {}".format(num_evals))
 
     instance_annotators = {}
     for record in annotations.iterrows():
@@ -201,10 +206,10 @@ def summarize_results(in_path, out_path):
     with open(out_path, "w") as f:
         json.dump(results, f, indent=4)
 
-    return results
+    return results, num_anns, num_evals
 
 
-def plot_acceptance(results, out_path):
+def plot_acceptance(results, out_path, num_anns, num_evals):
     """Plot the results and save to out_path."""
     # Plot acceptance rates
     acceptance_data = []
@@ -222,21 +227,26 @@ def plot_acceptance(results, out_path):
     acceptance_df = pd.DataFrame(acceptance_data)
 
     plt.figure(figsize=(10, 6))
-    colors = ['r', 'b']
+    colors = ['r', 'y']
+    ax = plt.subplot(111)
     for _, model_pair in enumerate(acceptance_df["model_pair"].unique()):
         subset = acceptance_df[acceptance_df["model_pair"] == model_pair]
-        plt.bar(subset["model"], subset["acceptance_rate"], label=model_pair, color=colors)
+        p = ax.bar(subset["model"], subset["acceptance_rate"], label=model_pair, color=colors)
+        ax.bar_label(p, label_type='center')
     plt.ylabel("Acceptance Rate")
-    plt.title("Model Acceptance Rates by Model Pair")
+    plt.title("Model Acceptance Rates ({} Judgements by {} Evaluators)".format(num_anns, num_evals))
     plt.ylim(0, 1.15)
     plt.legend(handles=[],
-               title='IAA (alpha): ' + ", ".join([f"{model_pair}: {results[model_pair]['acceptance_results']['agreement']['acceptance_agreement']:.2f}" for model_pair in results.keys()]), loc='upper center')
+               title='IAA -- ' + ", ".join(
+                   [f"{model_pair}: {results[model_pair]['acceptance_results']['agreement']['acceptance_agreement']:.2f}" for model_pair in results.keys()]
+                   ), 
+               loc='upper center')
     plt.xticks(rotation=90)
     plt.savefig(f"{out_path}_acceptance_rates.png",  bbox_inches='tight')
     plt.close()
 
 
-def plot_comparison(results, out_path):
+def plot_comparison(results, out_path, num_anns, num_evals):
     """Plot the results and save to out_path."""
     # Plot acceptance rates
     comparison_data = []
@@ -269,15 +279,20 @@ def plot_comparison(results, out_path):
     comparison_df = pd.DataFrame(comparison_data)
 
     plt.figure(figsize=(10, 6))
-    colors = ['r', 'b', 'g', 'c', 'm']
+    colors = ['r', 'y', 'g', 'c', 'm']
+    ax = plt.subplot(111)
     for _, model_pair in enumerate(comparison_df["model_pair"].unique()):
         subset = comparison_df[comparison_df["model_pair"] == model_pair]
-        plt.bar(subset["model"], subset["preference"], label=model_pair, color=colors)
+        p = ax.bar(subset["model"], subset["preference"], label=model_pair, color=colors)
+        ax.bar_label(p, label_type='center')
     plt.ylabel("Preference Rate")
-    plt.title("Model Preferences by Model Pair")
-    plt.ylim(0, 1)
+    plt.title("Model Preferences ({} Judgements by {} Evaluators)".format(num_anns, num_evals))
+    plt.ylim(0, 1.15)
     plt.legend(handles=[],
-        title="Relaxed IAA (alpha): " + ", ".join([f"{model_pair}: {results[model_pair]['comparison_results']['agreement']['relexed_comparison_agreement']:.2f}" for model_pair in results.keys()]), loc='upper center')
+        title="Relaxed IAA -- " + ", ".join(
+            [f"{model_pair}: {results[model_pair]['comparison_results']['agreement']['relexed_comparison_agreement']:.2f}" for model_pair in results.keys()]
+            ), 
+        loc='upper center')
     plt.xticks(rotation=90)
     plt.savefig(f"{out_path}_comparison_preferences.png",  bbox_inches='tight')
     plt.close()
@@ -296,6 +311,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    results = summarize_results(args.file, args.file.replace('.xlsx', '_results.json'))
-    plot_acceptance(results, args.file.replace('.xlsx', ''))
-    plot_comparison(results, args.file.replace('.xlsx', ''))
+    results, num_anns, num_evals = summarize_results(args.file, args.file.replace('.xlsx', '_results.json'))
+    plot_acceptance(results, args.file.replace('.xlsx', ''), num_anns=num_anns, num_evals=num_evals)
+    plot_comparison(results, args.file.replace('.xlsx', ''), num_anns=num_anns, num_evals=num_evals)
