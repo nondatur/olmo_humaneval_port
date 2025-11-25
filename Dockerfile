@@ -20,6 +20,7 @@ RUN pip --timeout=1000 install --trusted-host pypi.python.org --trusted-host pyp
 COPY . /app
 
 # Ensure GCS mount point exists
+RUN mkdir -p /mnt/gcs
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
