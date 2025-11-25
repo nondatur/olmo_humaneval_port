@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-MOUNT_POINT="/tmp/data"
+MOUNT_POINT="/mnt/gcs"
 
 echo "Waiting for GCS Fuse mount at $MOUNT_POINT..."
 
