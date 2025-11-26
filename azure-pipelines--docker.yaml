@@ -57,11 +57,11 @@ stages:
         pip install -r requirements.txt
       displayName: "Installing dependencies"
 
-    # Run flake8
+    # Run flake8 (but only on Python code!)
     - script: |
         pip install flake8 flake8-docstrings pep8-naming
         echo "Running flake8..."
-        flake8 app.py
+        flake8 --show-source --statistics --exit-zero --benchmark *.py
       continueOnError: true # print results but don't block!
       displayName: "Running linter (flake8)"
 
