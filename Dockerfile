@@ -22,7 +22,7 @@ COPY . /app
 
 # Ensure data directory exists for GCS mount
 RUN mkdir -p /mnt/gcs
-RUN ln -s /mnt/gcs /app/data
+RUN ln -s /mnt/gcs/morning_mail/data /app/data
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
