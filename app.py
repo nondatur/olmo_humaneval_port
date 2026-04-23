@@ -18,7 +18,12 @@ log = logging.getLogger('human-eval')
 random.seed(42)
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(os.getcwd(), 'data', 'evaluation.db')
+
+# Use environment variable for data path, fallback to default
+DATA_DIR = os.environ.get('DATA_PATH', os.path.join(os.getcwd(), 'data'))
+os.makedirs(DATA_DIR, exist_ok=True)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(DATA_DIR, 'evaluation.db')
 log.info(app.config['SQLALCHEMY_DATABASE_URI'])
 app.config['SECRET_KEY'] = '123456' # replace with a real secret key
 
@@ -433,7 +438,7 @@ def main():
     )
     args = parser.parse_args()
 
-    if not os.path.exists(os.path.join(os.getcwd(), 'data', 'evaluation.db')):
+    if not os.path.exists(os.path.join(DATA_DIR, 'evaluation.db')):
         with app.app_context():
             db.create_all()
             new_user = User(username="admin", password=generate_password_hash("admin"))

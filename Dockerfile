@@ -9,6 +9,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV FLASK_APP=app.py
 ENV FLASK_ENV=production
+ENV DATA_PATH=/app/data
 
 # Copy requirements first to leverage Docker cache
 COPY requirements.txt .
@@ -16,8 +17,14 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip --timeout=1000 install --trusted-host pypi.python.org --trusted-host pypi.org --trusted-host=files.pythonhosted.org --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy application code (excluding data directory which will be mounted)
 COPY . /app
+
+# Ensure data directory exists for GCS mount
+RUN mkdir -p /mnt/gcs
+RUN ln -s /mnt/gcs/morning_mail/data /app/data
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 # Expose port 5001 (default port from the app)
 EXPOSE 5001
@@ -26,5 +33,6 @@ EXPOSE 5001
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5001/')" || exit 1
 
-# Default command - requires comparison_data_path to be provided
-CMD ["python", "app.py", "--comparison_data_path", "data/eval_instances_mm_base.jsonl", "--host", "0.0.0.0", "--port", "5001"]
+# Default command - uses environment variable for data path
+ENTRYPOINT [ "/app/entrypoint.sh" ]
+CMD ["python", "app.py", "--comparison_data_path", "/app/data/eval_instances_mm_base.jsonl", "--host", "0.0.0.0", "--port", "5001"]
