@@ -48,7 +48,7 @@ Here is a screenshot of the annotation interface:
 
 <center>
 
-   ![image](./screenshot.png =850x600)
+   ![image](./screenshot.png)
 
 </center>
 
