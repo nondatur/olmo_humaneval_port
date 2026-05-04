@@ -1,0 +1,75 @@
+# GitHub Actions workflow for building and pushing container to private Docker registry
+name: Build and push container
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  SERVICE_NAME: human-eval-service
+  GCP_SAK: ${{ secrets.GCP_SA_KEY }}
+  GCP_REGION: us-central1
+  GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+  GCP_DOCKER_REG: us-central1-docker.pkg.dev
+  GCP_DOCKER_REPO: us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/docker-hub
+
+jobs:
+  docker-push-and-deploy:
+    name: Build and push container to Docker & GCP, deploy to Cloud Run
+    runs-on: ubuntu-latest
+    environment: docker-env
+
+    permissions:
+      contents: read
+      id-token: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build Docker image
+      run: |
+        docker build -t ${{ env.GCP_DOCKER_REPO }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
+
+    - name: Set up Google Cloud SDK key (SA)
+      uses: google-github-actions/auth@v3
+      with:
+        credentials_json: ${{ env.GCP_SAK }}
+
+    - name: Set up Google Cloud SDK
+      uses: google-github-actions/setup-gcloud@v3
+      with:
+         project_id: ${{ env.GCP_PROJECT }}
+         version: 522.0.0
+
+    - name: Configure Docker auth for GCP and push latest image to GCP repo
+      run: |   
+        #JSON_FILE=$(find ${GITHUB_WORKSPACE} -type f -name "*.json" 2>/dev/null | head -n 1)
+        #echo "* Activating GCP SA... with $JSON_FILE"
+        #gcloud auth activate-service-account --key-file=$JSON_FILE
+        echo "* Checking GCP status..."
+        gcloud auth list --filter="status: active" --format="value(account)"
+        echo "* Setting Docker registry to ${{ env.GCP_DOCKER_REG }}..."
+        gcloud auth configure-docker ${{ env.GCP_DOCKER_REG }}
+        echo "* Tagging image..."
+        docker image tag ${{ env.GCP_DOCKER_REPO }}/${{ env.SERVICE_NAME }}:${{ github.sha }} ${{ env.GCP_DOCKER_REPO }}/${{ env.SERVICE_NAME }}:latest
+        docker image list
+        echo "* Pushing image ${{ env.SERVICE_NAME }}:latest to repo ${{ env.GCP_DOCKER_REPO }}..."
+        docker image push ${{ env.GCP_DOCKER_REPO }}/${{ env.SERVICE_NAME }}:latest
+
+   
+   # Deploy to cloud run (requires GCS bucket)
+   # - name: Deploy to Cloud Run via GCP repo
+   #   run: |
+   #     echo "* Deploying ${{ env.SERVICE_NAME }} as cloud run..."
+   #     gcloud run deploy ${{ env.SERVICE_NAME }} \
+   #         --image=${{ env.GCP_DOCKER_REPO }}/${{ env.SERVICE_NAME }}:latest \
+   #         --platform=managed \
+   #         --region=${{ env.GCP_REGION }} \
+   #         --project=${{ env.GCP_PROJECT }}
