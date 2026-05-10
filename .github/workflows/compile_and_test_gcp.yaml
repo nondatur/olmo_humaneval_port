@@ -4,7 +4,7 @@ name: Build and push container
 on:
   push:
     branches:
-      - main
+      - master
 
 env:
   SERVICE_NAME: human-eval-service
