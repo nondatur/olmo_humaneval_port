@@ -11,37 +11,33 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app import app, db, User, EvaluationRecord
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(autouse=True)
 def app_config():
-    """Configure the app for testing at session level."""
-    
-    # Tell SQLAlchemy to use the new database URI
-    with app.app_context():
+    """Use a fresh in-memory database for every test."""
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
 
-        # Clear any existing database connections
-        db.session.remove()
-        db.get_engine().dispose()
-        
-        # Create the database with new URI
+    with app.app_context():
+        db.drop_all()
         db.create_all()
-        
-        # Create test users once for the entire session
         test_user = User(username='testuser', password=generate_password_hash('testpass'))
         admin_user = User(username='admin', password=generate_password_hash('admin'))
         db.session.add(test_user)
         db.session.add(admin_user)
         db.session.commit()
-    
-    yield app
+
+        yield app
+
+        db.session.remove()
+        db.engine.dispose()
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture
 def client(app_config):
-    """Create a test client using the session-configured app."""
+    """Create a test client using the isolated test database."""
     return app_config.test_client()
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture
 def auth_client(client):
     """Create an authenticated test client."""
     # Login the test user
