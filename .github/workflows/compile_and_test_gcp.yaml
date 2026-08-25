@@ -8,7 +8,7 @@ on:
 
 env:
   SERVICE_NAME: human-eval-service
-  GCP_SAK: ${{ secrets.GCP_SA_KEY }}
+  GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
   GCP_REGION: us-central1
   GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
   GCP_DOCKER_REG: us-central1-docker.pkg.dev
