@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - master
+  pull_request:
+    types:
+      - closed
 
 env:
   SERVICE_NAME: human-eval-service
@@ -13,6 +16,10 @@ env:
   GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
   GCP_DOCKER_REG: us-central1-docker.pkg.dev
   GCP_DOCKER_REPO: us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/docker-hub
+  # Bucket is mounted at /mnt/gcs; entrypoint.sh waits for it and app/data symlinks into it
+  GCS_BUCKET: ${{ secrets.GCS_BUCKET }}
+  GCS_MOUNT_PATH: /mnt/gcs
+  SERVICE_PORT: 5001
 
 jobs:
   docker-push-and-deploy:
@@ -61,9 +68,6 @@ jobs:
 
     - name: Configure Docker auth for GCP and push latest image to GCP repo
       run: |   
-        #JSON_FILE=$(find ${GITHUB_WORKSPACE} -type f -name "*.json" 2>/dev/null | head -n 1)
-        #echo "* Activating GCP SA... with $JSON_FILE"
-        #gcloud auth activate-service-account --key-file=$JSON_FILE
         echo "* Checking GCP status..."
         gcloud auth list --filter="status: active" --format="value(account)"
         echo "* Setting Docker registry to ${{ env.GCP_DOCKER_REG }}..."
@@ -74,13 +78,21 @@ jobs:
         echo "* Pushing image ${{ env.SERVICE_NAME }}:latest to repo ${{ env.GCP_DOCKER_REPO }}..."
         docker image push ${{ env.GCP_DOCKER_REPO }}/${{ env.SERVICE_NAME }}:latest
 
-   
-   # Deploy to cloud run (requires GCS bucket)
-   # - name: Deploy to Cloud Run via GCP repo
-   #   run: |
-   #     echo "* Deploying ${{ env.SERVICE_NAME }} as cloud run..."
-   #     gcloud run deploy ${{ env.SERVICE_NAME }} \
-   #         --image=${{ env.GCP_DOCKER_REPO }}/${{ env.SERVICE_NAME }}:latest \
-   #         --platform=managed \
-   #         --region=${{ env.GCP_REGION }} \
-   #         --project=${{ env.GCP_PROJECT }}
+    # Deploy to Cloud Run with the GCS bucket mounted, only on [deploy] commits or a closed PR
+    - name: Deploy to Cloud Run via GCP repo
+      if: contains(github.event.head_commit.message, '[deploy]') || github.event_name == 'pull_request'
+      run: |
+        if [ -z "${{ env.GCS_BUCKET }}" ]; then
+          echo "GCS_BUCKET secret is not set; cannot mount the data bucket." >&2
+          exit 1
+        fi
+        echo "* Deploying ${{ env.SERVICE_NAME }} as cloud run..."
+        gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image=${{ env.GCP_DOCKER_REPO }}/${{ env.SERVICE_NAME }}:latest \
+            --platform=managed \
+            --region=${{ env.GCP_REGION }} \
+            --project=${{ env.GCP_PROJECT }} \
+            --port=${{ env.SERVICE_PORT }} \
+            --execution-environment=gen2 \
+            --add-volume=name=gcs-data,type=cloud-storage,bucket=${{ env.GCS_BUCKET }} \
+            --add-volume-mount=volume=gcs-data,mount-path=${{ env.GCS_MOUNT_PATH }}

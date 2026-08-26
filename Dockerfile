@@ -22,7 +22,7 @@ COPY . /app
 
 # Ensure data directory exists for GCS mount
 RUN mkdir -p /mnt/gcs
-RUN ln -s /mnt/gcs/llm_human_eval/data /app/data # set up before deployment!!!
+RUN ln -s /mnt/gcs/human-evaluation /app/data # set up before deployment!!!
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
