@@ -79,8 +79,9 @@ jobs:
         docker image push ${{ env.GCP_DOCKER_REPO }}/${{ env.SERVICE_NAME }}:latest
 
     # Deploy to Cloud Run with the GCS bucket mounted, only on [deploy] commits or a closed PR
+    # Scans every commit in the push, since a merge commit tip would otherwise mask [deploy]
     - name: Deploy to Cloud Run via GCP repo
-      if: contains(github.event.head_commit.message, '[deploy]') || github.event_name == 'pull_request'
+      if: contains(github.event.head_commit.message, '[deploy]') || contains(join(github.event.commits.*.message, ' '), '[deploy]') || github.event_name == 'pull_request'
       run: |
         if [ -z "${{ env.GCS_BUCKET }}" ]; then
           echo "GCS_BUCKET secret is not set; cannot mount the data bucket." >&2
