@@ -2,14 +2,16 @@ import argparse
 import json
 import os
 import random
+import secrets
 import time, sqlite3
 from io import BytesIO
 import pandas as pd
 from collections import Counter
 
-from flask import Flask, jsonify, redirect, render_template, request, url_for, make_response
+from flask import Flask, abort, jsonify, redirect, render_template, request, url_for, make_response
 from flask_login import LoginManager, UserMixin, current_user, login_required, login_user, logout_user
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import logging
@@ -25,7 +27,17 @@ os.makedirs(DATA_DIR, exist_ok=True)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(DATA_DIR, 'evaluation.db')
 log.info(app.config['SQLALCHEMY_DATABASE_URI'])
-app.config['SECRET_KEY'] = '123456' # replace with a real secret key
+
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    # Ephemeral key for local runs; sessions do not survive a restart or extra instances
+    SECRET_KEY = secrets.token_hex(32)
+    log.warning('SECRET_KEY is not set; generated a temporary key for this process.')
+app.config['SECRET_KEY'] = SECRET_KEY
+
+# Signup is disabled unless a registration token is configured
+SIGNUP_TOKEN = os.environ.get('SIGNUP_TOKEN')
+MIN_PASSWORD_LENGTH = 8
 
 db = SQLAlchemy(app)
 login_manager = LoginManager()
@@ -81,13 +93,31 @@ def login():
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
+    if not SIGNUP_TOKEN:
+        abort(404)
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        hashed_password = generate_password_hash(password)
-        new_user = User(username=username, password=hashed_password)
+        if not secrets.compare_digest(request.form.get('token', ''), SIGNUP_TOKEN):
+            return render_template('login.html', error='Invalid registration token.'), 403
+
+        username = (request.form.get('username') or '').strip()
+        password = request.form.get('password') or ''
+        if not username:
+            return render_template('login.html', error='Username is required.'), 400
+        if len(password) < MIN_PASSWORD_LENGTH:
+            return render_template(
+                'login.html',
+                error=f'Password must be at least {MIN_PASSWORD_LENGTH} characters.'
+            ), 400
+        if User.query.filter_by(username=username).first():
+            return render_template('login.html', error='That username is already taken.'), 409
+
+        new_user = User(username=username, password=generate_password_hash(password))
         db.session.add(new_user)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            return render_template('login.html', error='That username is already taken.'), 409
         return redirect(url_for('login'))
     else:
         return render_template('login.html')
@@ -439,9 +469,12 @@ def main():
     args = parser.parse_args()
 
     if not os.path.exists(os.path.join(DATA_DIR, 'evaluation.db')):
+        admin_password = os.environ.get('ADMIN_PASSWORD')
+        if not admin_password:
+            raise SystemExit("ADMIN_PASSWORD is not set; refusing to create the admin account.")
         with app.app_context():
             db.create_all()
-            new_user = User(username="admin", password=generate_password_hash("admin"))
+            new_user = User(username="admin", password=generate_password_hash(admin_password))
             db.session.add(new_user)
             db.session.commit()
 

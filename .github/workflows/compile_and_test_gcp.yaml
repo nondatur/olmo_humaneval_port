@@ -20,8 +20,11 @@ env:
   GCS_BUCKET: ${{ secrets.GCS_BUCKET }}
   GCS_MOUNT_PATH: /mnt/gcs
   # gcloud separates mount options with ';' (YAML service specs use ',')
-  GCS_MOUNT_OPTIONS: "log-severity=debug;implicit-dirs=true"
+  GCS_MOUNT_OPTIONS: "log-severity=debug"
   SERVICE_PORT: 5001
+  SECRET_KEY: ${{ secrets.SECRET_KEY }}
+  SIGNUP_TOKEN: ${{ secrets.SIGNUP_TOKEN }}
+  ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
 
 jobs:
   docker-push-and-deploy:
@@ -89,6 +92,14 @@ jobs:
           echo "GCS_BUCKET secret is not set; cannot mount the data bucket." >&2
           exit 1
         fi
+        if [ -z "${{ env.SECRET_KEY }}" ]; then
+          echo "SECRET_KEY secret is not set; refusing to deploy a public service." >&2
+          exit 1
+        fi
+        if [ -z "${{ env.ADMIN_PASSWORD }}" ]; then
+          echo "ADMIN_PASSWORD secret is not set; the admin account cannot be created." >&2
+          exit 1
+        fi
         echo "* Deploying ${{ env.SERVICE_NAME }} as cloud run..."
         gcloud run deploy ${{ env.SERVICE_NAME }} \
             --image=${{ env.GCP_DOCKER_REPO }}/${{ env.SERVICE_NAME }}:latest \
@@ -97,5 +108,8 @@ jobs:
             --project=${{ env.GCP_PROJECT }} \
             --port=${{ env.SERVICE_PORT }} \
             --execution-environment=gen2 \
+            --allow-unauthenticated \
+            --max-instances=1 \
+            --update-env-vars=^@^SECRET_KEY="${{ env.SECRET_KEY }}"@SIGNUP_TOKEN="${{ env.SIGNUP_TOKEN }}"@ADMIN_PASSWORD="${{ env.ADMIN_PASSWORD }}" \
             --add-volume=name=gcs-data,type=cloud-storage,bucket=${{ env.GCS_BUCKET }},mount-options="${{ env.GCS_MOUNT_OPTIONS }}" \
             --add-volume-mount=volume=gcs-data,mount-path=${{ env.GCS_MOUNT_PATH }}
