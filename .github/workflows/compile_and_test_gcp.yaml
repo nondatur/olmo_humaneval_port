@@ -8,6 +8,7 @@ on:
   pull_request:
     types:
       - closed
+    # Only meaningful when the PR was actually merged; the job-level condition below enforces this
 
 env:
   SERVICE_NAME: human-eval-service
@@ -16,6 +17,8 @@ env:
   GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
   GCP_DOCKER_REG: us-central1-docker.pkg.dev
   GCP_DOCKER_REPO: us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/docker-hub
+  # Runtime SA used by Cloud Run (must have storage.objectAdmin on GCS_BUCKET)
+  GCP_RUNTIME_SA: cicd-sa@steel-wall-436909-g7.iam.gserviceaccount.com
   # Bucket is mounted at /mnt/gcs; entrypoint.sh waits for it and app/data symlinks into it
   GCS_BUCKET: ${{ secrets.GCS_BUCKET }}
   GCS_MOUNT_PATH: /mnt/gcs
@@ -84,7 +87,7 @@ jobs:
     # Deploy to Cloud Run with the GCS bucket mounted, only on [deploy] commits or a closed PR
     # Scans every commit in the push, since a merge commit tip would otherwise mask [deploy]
     - name: Deploy to Cloud Run via GCP repo
-      if: contains(github.event.head_commit.message, '[deploy]') || contains(join(github.event.commits.*.message, ' '), '[deploy]') || github.event_name == 'pull_request'
+      if: contains(github.event.head_commit.message, '[deploy]') || contains(join(github.event.commits.*.message, ' '), '[deploy]') || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
       run: |
         if [ -z "${{ env.GCS_BUCKET }}" ]; then
           echo "GCS_BUCKET secret is not set; cannot mount the data bucket." >&2
@@ -108,6 +111,7 @@ jobs:
             --execution-environment=gen2 \
             --allow-unauthenticated \
             --max-instances=1 \
-            --update-env-vars=^@^SECRET_KEY="${{ env.SECRET_KEY }}"@SIGNUP_TOKEN="${{ env.SIGNUP_TOKEN }}"@ADMIN_PASSWORD="${{ env.ADMIN_PASSWORD }}" \
+            --update-env-vars="^@^SECRET_KEY=${{ env.SECRET_KEY }}@SIGNUP_TOKEN=${{ env.SIGNUP_TOKEN }}@ADMIN_PASSWORD=${{ env.ADMIN_PASSWORD }}" \
+            --service-account=${{ env.GCP_RUNTIME_SA }} \
             --add-volume=name=gcs-data,type=cloud-storage,bucket=${{ env.GCS_BUCKET }} \
             --add-volume-mount=volume=gcs-data,mount-path=${{ env.GCS_MOUNT_PATH }}

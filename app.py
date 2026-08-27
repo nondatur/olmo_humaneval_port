@@ -46,7 +46,7 @@ login_manager.init_app(app)
 # GLOBAL VARIABLE for the comparison instances
 COMPARISON_INSTANCES=[]
 
-APP_VERSION = "v1.0.0"
+APP_VERSION = "v1.0.1"
 
 
 @app.context_processor
