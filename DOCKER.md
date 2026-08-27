@@ -91,7 +91,6 @@ The deploy command:
 - allows unauthenticated network access, with Flask login providing application authentication;
 - limits the service to one instance because SQLite is stored on the mounted volume;
 - mounts the bucket at `/mnt/gcs`;
-- uses Cloud Storage FUSE mount option `log-severity=debug`;
 - maps `/app/data` to the `human-evaluation` folder inside that bucket.
 
 The following secrets must exist in the GitHub `docker-env` environment:

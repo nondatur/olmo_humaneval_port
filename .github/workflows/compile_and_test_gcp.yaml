@@ -19,8 +19,6 @@ env:
   # Bucket is mounted at /mnt/gcs; entrypoint.sh waits for it and app/data symlinks into it
   GCS_BUCKET: ${{ secrets.GCS_BUCKET }}
   GCS_MOUNT_PATH: /mnt/gcs
-  # gcloud separates mount options with ';' (YAML service specs use ',')
-  GCS_MOUNT_OPTIONS: "log-severity=debug"
   SERVICE_PORT: 5001
   SECRET_KEY: ${{ secrets.SECRET_KEY }}
   SIGNUP_TOKEN: ${{ secrets.SIGNUP_TOKEN }}
@@ -111,5 +109,5 @@ jobs:
             --allow-unauthenticated \
             --max-instances=1 \
             --update-env-vars=^@^SECRET_KEY="${{ env.SECRET_KEY }}"@SIGNUP_TOKEN="${{ env.SIGNUP_TOKEN }}"@ADMIN_PASSWORD="${{ env.ADMIN_PASSWORD }}" \
-            --add-volume=name=gcs-data,type=cloud-storage,bucket=${{ env.GCS_BUCKET }},mount-options="${{ env.GCS_MOUNT_OPTIONS }}" \
+            --add-volume=name=gcs-data,type=cloud-storage,bucket=${{ env.GCS_BUCKET }} \
             --add-volume-mount=volume=gcs-data,mount-path=${{ env.GCS_MOUNT_PATH }}
