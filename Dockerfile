@@ -35,4 +35,4 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
 
 # Default command - uses environment variable for data path
 ENTRYPOINT [ "/app/entrypoint.sh" ]
-CMD ["python", "app.py", "--comparison_data_path", "/app/data/eval_instances_mm_base.jsonl", "--host", "0.0.0.0", "--port", "5001"]
+CMD ["python", "app.py", "--comparison_data_path", "/app/data/eval_instances.jsonl", "--host", "0.0.0.0", "--port", "5001"]
