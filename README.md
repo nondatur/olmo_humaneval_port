@@ -122,6 +122,14 @@ Then, you can use the following command to compute the evaluation metrics and ag
 python compute_metrics.py data/eval_annotations.xlsx
 ```
 
+This generates the metrics JSON file and two Matplotlib charts:
+
+```text
+data/eval_annotations_results.json
+data/eval_annotations_acceptance_rates.png
+data/eval_annotations_comparison_preferences.png
+```
+
 ## Tests
 
 To run the unit tests, type:
