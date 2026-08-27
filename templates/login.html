@@ -12,7 +12,9 @@
     <div class="row">
         <div id="nav" class="col-md-3">
             <!-- Title -->
-            <h2 class="text-center" id="title"><a href="/" style="text-decoration: none">🕵 Human Evaluation</a></h2>
+            <!-- <h2 class="text-center" id="title"><a href="/" style="text-decoration: none">🕵 LLM A/B Testing</a></h2> -->
+
+            <h2 class="text-center" id="title"><a href="/" style="text-decoration: none"><img src="{{ url_for('static', filename='favicon.png') }}" alt="" style="height: 1em; width: auto; vertical-align: -0.1em;"> LLM A/B Testing</a></h2>
 
             <!-- Log-in and sign-up -->
             <div class="row" id="login-region">
@@ -54,8 +56,11 @@
             </div>
         </div>
 
-        <div class="col-md-9"></div>
+        <div id="login-overview" class="col-md-9">
+            <img src="{{ url_for('static', filename='ai-safety-overview.png') }}" alt="AI safety overview">
+        </div>
     </div>
+    <div id="app-version">{{ app_version }} @ Frankfurt AI Safety</div>
 </body>
 
 <script>

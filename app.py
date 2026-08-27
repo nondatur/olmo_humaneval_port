@@ -46,6 +46,13 @@ login_manager.init_app(app)
 # GLOBAL VARIABLE for the comparison instances
 COMPARISON_INSTANCES=[]
 
+APP_VERSION = "v1.0.0"
+
+
+@app.context_processor
+def inject_app_version():
+    return {"app_version": APP_VERSION}
+
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)

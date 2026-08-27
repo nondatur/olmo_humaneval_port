@@ -13,6 +13,28 @@ xmp {
     background-color: aliceblue;
     min-height: 100vh;
 }
+#login-overview {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+#login-overview img {
+    display: block;
+    max-width: 100%;
+    max-height: calc(100vh - 4rem);
+    height: auto;
+    object-fit: contain;
+}
+#app-version {
+    position: fixed;
+    bottom: 8px;
+    left: 10px;
+    font-size: 0.75rem;
+    color: #6c757d;
+    pointer-events: none;
+}
 #history-message-region {
     padding: 20px;
     border-radius: 5px;
