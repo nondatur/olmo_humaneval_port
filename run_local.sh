@@ -8,7 +8,7 @@ export SECRET_KEY="dev-secret-key"
 export SIGNUP_TOKEN="dev-signup-token"
 export ADMIN_PASSWORD="admin"
 
-DATA_FILE="${DATA_FILE:-data/eval_instances_mm_base.jsonl}"
+DATA_FILE="${DATA_FILE:-data/eval_instances.jsonl}"
 HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-5001}"
 

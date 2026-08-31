@@ -66,14 +66,31 @@ Or, in debug mode:
 python app.py --comparison_data_path data/your_data_file.jsonl --host 0.0.0.0 --port 5001 --debug
 ```
 
-For local testing there is a helper script that sets throwaway credentials and starts the app on
-`127.0.0.1:5001`:
+For local testing there are two helper scripts. Both set the same throwaway credentials
+(`admin` / `admin`, signup token `dev-signup-token`) and serve on `127.0.0.1:5001`.
+
+`run_local.sh` runs the Flask development server, which supports `--debug` and reloads on change:
 
 ```bash
 ./run_local.sh                                          # defaults
 DATA_FILE=data/eval_instances_tulu_1.jsonl ./run_local.sh
 PORT=8080 ./run_local.sh --debug
 ```
+
+`run_gunicorn_local.sh` runs gunicorn exactly as the container does, so use it to check anything
+that depends on the production server rather than the dev one:
+
+```bash
+./run_gunicorn_local.sh                                 # defaults
+DATA_FILE=data/eval_instances_tulu_1.jsonl ./run_gunicorn_local.sh
+PORT=8080 WORKERS=1 THREADS=8 ./run_gunicorn_local.sh
+./run_gunicorn_local.sh --reload                        # extra flags pass through to gunicorn
+```
+
+It defaults to `data/eval_instances.jsonl` (the file the image loads) rather than the
+`_mm_base` file used by `run_local.sh`. It picks an interpreter in this order: an explicit
+`PYTHON=`, an activated virtualenv, then `./.venv`, and it fails with an install hint if gunicorn
+is missing from the one it chose.
 
 ### Serving in production
 
@@ -85,6 +102,8 @@ and therefore reads `COMPARISON_DATA_PATH` from the environment:
 SECRET_KEY=... ADMIN_PASSWORD=... COMPARISON_DATA_PATH=data/your_data_file.jsonl \
     gunicorn --bind 0.0.0.0:5001 --workers 1 --threads 8 --timeout 120 app:app
 ```
+
+Locally, `./run_gunicorn_local.sh` wraps this same command with development credentials.
 
 **Keep `--workers 1`.** The SQLite database is stored on a Cloud Storage FUSE mount, which provides
 no POSIX file locking and uploads a whole object when the file is closed. A second worker process
