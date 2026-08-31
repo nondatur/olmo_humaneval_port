@@ -94,13 +94,15 @@ configuration. The admin account is created only once; changing
 The GitHub Actions workflow in `.github/workflows/compile_and_test_gcp.yaml`
 runs unit tests, builds the image, and pushes it to Artifact Registry on every
 push to `master`. The Cloud Run deploy step runs only when a push contains
-`[deploy]` in one of its commit messages or when a pull request is closed.
+`[deploy]` in one of its commit messages or when a pull request is merged.
 
 The deploy command:
 
 - uses the second-generation execution environment;
 - allows unauthenticated network access, with Flask login providing application authentication;
 - limits the service to one instance because SQLite is stored on the mounted volume;
+- pins resources to `--memory=2Gi`, `--cpu=2`, and `--concurrency=16`;
+- deploys with the explicit runtime identity `cicd-sa@steel-wall-436909-g7.iam.gserviceaccount.com`;
 - mounts the bucket at `/mnt/gcs`;
 - maps `/app/data` to the `human-evaluation` folder inside that bucket.
 
@@ -124,8 +126,9 @@ The following secrets must exist in the GitHub `docker-env` environment:
 | `SIGNUP_TOKEN` | Registration token for annotators |
 | `ADMIN_PASSWORD` | Initial admin account password |
 
-The Cloud Run runtime service account needs `roles/storage.objectUser` on the
-bucket because the app writes `evaluation.db` and annotation records there.
+The Cloud Run runtime service account needs object-level write permissions on
+the bucket (for example `roles/storage.objectAdmin`) because the app writes
+`evaluation.db` and annotation records there.
 
 ## Docker Compose
 

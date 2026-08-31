@@ -4,6 +4,11 @@ import pytest
 from unittest.mock import patch, mock_open
 from werkzeug.security import generate_password_hash
 
+
+def _test_password_hash(password: str) -> str:
+    """Stable test hash method across OpenSSL/Python builds."""
+    return generate_password_hash(password, method='pbkdf2:sha256')
+
 # Import the Flask app and models
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -19,8 +24,8 @@ def app_config():
     with app.app_context():
         db.drop_all()
         db.create_all()
-        test_user = User(username='testuser', password=generate_password_hash('testpass'))
-        admin_user = User(username='admin', password=generate_password_hash('admin'))
+        test_user = User(username='testuser', password=_test_password_hash('testpass'))
+        admin_user = User(username='admin', password=_test_password_hash('admin'))
         db.session.add(test_user)
         db.session.add(admin_user)
         db.session.commit()
@@ -115,7 +120,7 @@ class TestDatabaseIntegrity:
     def test_user_model_creation(self):
         """Test User model creation and properties."""
         with app.app_context():
-            user = User(username='testmodel', password=generate_password_hash('testpass'))
+            user = User(username='testmodel', password=_test_password_hash('testpass'))
             db.session.add(user)
             db.session.commit()
             

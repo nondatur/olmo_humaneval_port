@@ -207,13 +207,16 @@ container and pushes it to Artifact Registry. Deployment to Cloud Run is a separ
 | Stage | When it runs |
 | --- | --- |
 | Test, build, push | Every push to `master` |
-| Deploy to Cloud Run | Only when a pushed commit message contains `[deploy]`, or when a pull request is closed |
+| Deploy to Cloud Run | Only when a pushed commit message contains `[deploy]`, or when a pull request is merged |
 
 The deploy step mounts a Cloud Storage bucket at `/mnt/gcs` using Cloud Storage FUSE. The image
 symlinks `/app/data` to `/mnt/gcs/human-evaluation`, so `evaluation.db` lives in the bucket and
 survives restarts and scale-to-zero. The service runs with `--max-instances=1`, because SQLite over
 Cloud Storage FUSE is not safe to write from several instances at once, and with
 `--allow-unauthenticated`, so the application login is the only access control.
+
+Cloud Run resource settings are pinned in CI/CD: `--memory=2Gi`, `--cpu=2`, and
+`--concurrency=16`.
 
 The following repository/environment secrets must be defined in the `docker-env` GitHub environment:
 
@@ -227,7 +230,41 @@ The following repository/environment secrets must be defined in the `docker-env`
 | `ADMIN_PASSWORD` | Password of the initial `admin` account |
 
 The deploy step fails fast if `GCS_BUCKET`, `SECRET_KEY` or `ADMIN_PASSWORD` is missing. The Cloud
-Run service identity needs `roles/storage.objectUser` on the bucket, since the app writes to it.
+Run service identity is set explicitly to
+`cicd-sa@steel-wall-436909-g7.iam.gserviceaccount.com` and needs object-level write permissions on
+the bucket (for example `roles/storage.objectAdmin`).
+
+### Deployment troubleshooting
+
+If deploy succeeds but the service cannot read/write the bucket, verify runtime identity and IAM:
+
+```bash
+PROJECT_ID=steel-wall-436909-g7
+SERVICE_NAME=human-eval-service
+REGION=us-central1
+BUCKET=ai-safety-bucket
+RUNTIME_SA=cicd-sa@steel-wall-436909-g7.iam.gserviceaccount.com
+
+# 1) Confirm the service runtime account
+gcloud run services describe "$SERVICE_NAME" \
+    --region="$REGION" --project="$PROJECT_ID" \
+    --format='value(spec.template.spec.serviceAccountName)'
+
+# 2) Confirm the bucket exists and is reachable
+gcloud storage buckets describe "gs://$BUCKET"
+
+# 3) Check IAM bindings for the runtime SA on the bucket
+gcloud storage buckets get-iam-policy "gs://$BUCKET" --format=json | \
+    jq '.bindings[] | select(.members[]? == "serviceAccount:'"$RUNTIME_SA"'")'
+
+# 4) Grant write access (run as a project/bucket admin account)
+gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" \
+    --member="serviceAccount:$RUNTIME_SA" \
+    --role="roles/storage.objectAdmin"
+```
+
+If `add-iam-policy-binding` fails with `storage.buckets.getIamPolicy denied`, the active account
+does not have permission to edit bucket IAM. Switch to a project/bucket admin account and rerun.
 
 ## Notes
 
