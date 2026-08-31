@@ -1,5 +1,7 @@
-// Global variable to store the current index
+// Position in this user's personal ordering of the instances
 let current_index = instance_index;
+// Global index of the instance currently displayed (what gets stored in the database)
+let current_instance_index = null;
 
 // Fetch the initial model outputs based on the instance index
 rendere_instance(current_index);
@@ -18,11 +20,13 @@ async function rendere_instance(index) {
             timeout=1e10 // set timeout to a very large number so that the alert doesn't disappear
         );
         clear_all();
+        current_instance_index = null;
         return;
     }
 
     clear_all();
-    $("#instance-id").html(`Instance ${index}`);
+    current_instance_index = data.instance_index;
+    $("#instance-id").html(`Instance ${index + 1} of ${data.total}`);
 
     // let's use a unified format here that support multiple messages, though currently we only have one user prompt.
     var messages = [{"role": "user", "text": data.prompt}];
@@ -111,7 +115,7 @@ async function submit_evaluation() {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                index: current_index,
+                index: current_instance_index,
                 model_a,
                 model_b,
                 prompt,
@@ -182,7 +186,7 @@ async function submit_feedback() {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                index: current_index,
+                index: current_instance_index,
                 model_a,
                 model_b,
                 prompt,

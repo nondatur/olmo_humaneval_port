@@ -1,23 +1,25 @@
 import argparse
+import hashlib
 import json
 import os
 import random
 import secrets
 import time, sqlite3
+from collections import Counter
+from contextlib import closing
+from functools import lru_cache
 from io import BytesIO
 import pandas as pd
-from collections import Counter
 
 from flask import Flask, abort, jsonify, redirect, render_template, request, url_for, make_response
 from flask_login import LoginManager, UserMixin, current_user, login_required, login_user, logout_user
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.pool import NullPool
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import logging
 log = logging.getLogger('human-eval')
-
-random.seed(42)
 
 app = Flask(__name__)
 
@@ -25,7 +27,11 @@ app = Flask(__name__)
 DATA_DIR = os.environ.get('DATA_PATH', os.path.join(os.getcwd(), 'data'))
 os.makedirs(DATA_DIR, exist_ok=True)
 
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(DATA_DIR, 'evaluation.db')
+DB_PATH = os.path.join(DATA_DIR, 'evaluation.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + DB_PATH
+# The database lives on a Cloud Storage FUSE mount, which only uploads a file when it is
+# closed; pooled connections would keep committed rows staged locally and never persisted.
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'poolclass': NullPool}
 log.info(app.config['SQLALCHEMY_DATABASE_URI'])
 
 SECRET_KEY = os.environ.get('SECRET_KEY')
@@ -151,13 +157,46 @@ def instances(index):
     return render_template('index.html', index=index, current_user=current_user)
 
 
-@app.route("/api/model-outputs/<int:index>", methods=["GET"])
-def get_model_outputs(index):
-    if 0 <= index < len(COMPARISON_INSTANCES):
-        prompt = COMPARISON_INSTANCES[index]["prompt"]
-        completions = COMPARISON_INSTANCES[index]["completions"]
-        random.shuffle(completions)
-        return jsonify({"prompt": prompt, "completions": completions}), 200
+def _stable_seed(*parts):
+    raw = "\x1f".join(str(part) for part in parts).encode("utf-8")
+    return int.from_bytes(hashlib.sha256(raw).digest()[:8], "big")
+
+
+def _user_key():
+    return current_user.username if current_user.is_authenticated else "anonymous"
+
+
+@lru_cache(maxsize=None)
+def _instance_order(user_key, num_instances):
+    order = list(range(num_instances))
+    random.Random(_stable_seed("order", user_key)).shuffle(order)
+    return order
+
+
+def instance_order():
+    """Global instance indices in the order this user should evaluate them."""
+    return _instance_order(_user_key(), len(COMPARISON_INSTANCES))
+
+
+def ordered_completions(instance):
+    """Copy of the completions, side-swapped at random on every view."""
+    completions = list(instance["completions"])
+    if random.random() < 0.5:
+        completions.reverse()
+    return completions
+
+
+@app.route("/api/model-outputs/<int:position>", methods=["GET"])
+def get_model_outputs(position):
+    order = instance_order()
+    if 0 <= position < len(order):
+        instance = COMPARISON_INSTANCES[order[position]]
+        return jsonify({
+            "prompt": instance["prompt"],
+            "completions": ordered_completions(instance),
+            "instance_index": order[position],
+            "total": len(order),
+        }), 200
     return jsonify({"error": "Index out of range"}), 200
 
 
@@ -172,13 +211,9 @@ def summary():
 @login_required
 def export():
 
-    # Database connection
-    DATABASE = "data/evaluation.db"
-    DB_CONN = sqlite3.connect(DATABASE, check_same_thread=False)
-    #DB_CURSOR = DB_CONN.cursor()
-
     # Export the evaluation results as excel
-    df = pd.read_sql_query("SELECT * from evaluation_record", DB_CONN)
+    with closing(sqlite3.connect(DB_PATH)) as conn:
+        df = pd.read_sql_query("SELECT * from evaluation_record", conn)
 
     # Write Excel file to an in-memory buffer
     output = BytesIO()
@@ -397,10 +432,13 @@ def submit_evaluation():
     evaluation_data = request.get_json()
     log.info("Got new evaluation data:")
     log.info(evaluation_data)
+    instance_index = evaluation_data["index"]
+    if not isinstance(instance_index, int) or not 0 <= instance_index < len(COMPARISON_INSTANCES):
+        return jsonify({"error": "Invalid instance index"}), 400
     # write to the database
     new_record = EvaluationRecord(
-        instance_index=evaluation_data["index"],
-        instance_id=COMPARISON_INSTANCES[evaluation_data["index"]]["id"],
+        instance_index=instance_index,
+        instance_id=COMPARISON_INSTANCES[instance_index]["id"],
         prompt=evaluation_data["prompt"],
         model_a=evaluation_data["model_a"],
         model_b=evaluation_data["model_b"],
@@ -425,10 +463,13 @@ def submit_feedback():
     feedback_data = request.get_json()
     log.info("Got new feedback:")
     log.info(feedback_data)
+    instance_index = feedback_data["index"]
+    if not isinstance(instance_index, int) or not 0 <= instance_index < len(COMPARISON_INSTANCES):
+        return jsonify({"error": "Invalid instance index"}), 400
     # write to the database
     new_record = EvaluationRecord(
-        instance_index=feedback_data["index"],
-        instance_id=COMPARISON_INSTANCES[feedback_data["index"]]["id"],
+        instance_index=instance_index,
+        instance_id=COMPARISON_INSTANCES[instance_index]["id"],
         prompt=feedback_data["prompt"],
         model_a=feedback_data["model_a"],
         model_b=feedback_data["model_b"],
@@ -445,6 +486,35 @@ def submit_feedback():
     db.session.add(new_record)
     db.session.commit()
     return jsonify({"message": "Evaluation data submitted successfully"}), 200
+
+
+def bootstrap_database():
+    if os.path.exists(DB_PATH):
+        return
+    admin_password = os.environ.get('ADMIN_PASSWORD')
+    if not admin_password:
+        raise SystemExit("ADMIN_PASSWORD is not set; refusing to create the admin account.")
+    with app.app_context():
+        db.create_all()
+        new_user = User(username="admin", password=generate_password_hash(admin_password))
+        db.session.add(new_user)
+        db.session.commit()
+
+
+def init_app(comparison_data_path):
+    """Prepare the database and load the comparison instances; must run before serving."""
+    bootstrap_database()
+
+    global COMPARISON_INSTANCES
+    with open(comparison_data_path, "r") as f:
+        COMPARISON_INSTANCES = [json.loads(line.strip()) for line in f.readlines()]
+
+    log.info("Total number of comparison instances: {}".format(len(COMPARISON_INSTANCES)))
+
+
+# Gunicorn imports this module instead of calling main(), so initialise here when configured.
+if os.environ.get("COMPARISON_DATA_PATH"):
+    init_app(os.environ["COMPARISON_DATA_PATH"])
 
 
 def main():
@@ -475,25 +545,14 @@ def main():
     )
     args = parser.parse_args()
 
-    if not os.path.exists(os.path.join(DATA_DIR, 'evaluation.db')):
-        admin_password = os.environ.get('ADMIN_PASSWORD')
-        if not admin_password:
-            raise SystemExit("ADMIN_PASSWORD is not set; refusing to create the admin account.")
-        with app.app_context():
-            db.create_all()
-            new_user = User(username="admin", password=generate_password_hash(admin_password))
-            db.session.add(new_user)
-            db.session.commit()
-
-    # load the predictions
-    global COMPARISON_INSTANCES
-    with open(args.comparison_data_path, "r") as f:
-        COMPARISON_INSTANCES = [json.loads(line.strip()) for line in f.readlines()]
-
-    log.info("Total number of comparison instances: {}".format(len(COMPARISON_INSTANCES)))
+    init_app(args.comparison_data_path)
 
     # run the app and listen on port 5000
     app.run(host=args.host, port=args.port, debug=args.debug)
+
+
+if __name__ == '__main__':
+    main()
 
 
 if __name__ == '__main__':

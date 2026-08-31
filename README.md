@@ -46,6 +46,7 @@ The app is configured through environment variables. Nothing sensitive is stored
 | `SIGNUP_TOKEN` | Optional | Registration token. **If unset, `/signup` returns 404 and no new accounts can be created.** |
 | `ADMIN_PASSWORD` | On first run | Password for the initial `admin` account. The app refuses to start rather than fall back to a default password. |
 | `DATA_PATH` | Optional | Directory holding `evaluation.db`. Defaults to `./data`. |
+| `COMPARISON_DATA_PATH` | Under gunicorn | Path to the instances `.jsonl`. Only needed when the app is imported by a WSGI server; `python app.py` uses `--comparison_data_path` instead. |
 
 Generate values with:
 
@@ -74,6 +75,45 @@ DATA_FILE=data/eval_instances_tulu_1.jsonl ./run_local.sh
 PORT=8080 ./run_local.sh --debug
 ```
 
+### Serving in production
+
+`python app.py` starts the Flask development server, which is fine for local work but should not
+face real annotators. The container image instead runs gunicorn, which imports the app as a module
+and therefore reads `COMPARISON_DATA_PATH` from the environment:
+
+```bash
+SECRET_KEY=... ADMIN_PASSWORD=... COMPARISON_DATA_PATH=data/your_data_file.jsonl \
+    gunicorn --bind 0.0.0.0:5001 --workers 1 --threads 8 --timeout 120 app:app
+```
+
+**Keep `--workers 1`.** The SQLite database is stored on a Cloud Storage FUSE mount, which provides
+no POSIX file locking and uploads a whole object when the file is closed. A second worker process
+would be a second independent writer to that object, and the loser of the race silently loses its
+annotations. For the same reason the deployment is pinned to `--max-instances=1`, and SQLAlchemy is
+configured with `NullPool` so each request closes the database file and the commit actually reaches
+the bucket. Threads are safe: they share one process and SQLite serialises them internally.
+
+If you ever need more than one worker or instance, move the database to Cloud SQL — only
+`SQLALCHEMY_DATABASE_URI` has to change.
+
+### Randomisation
+
+Two things are randomised so that annotators are not biased by presentation:
+
+- **Which side each model appears on** is re-drawn on every request, so model A is equally likely to
+  be shown left or right. The submitted record stores the model names as displayed, so the data
+  stays correct regardless. Note that revisiting an instance may show the two sides swapped.
+- **The order instances are presented in** is a per-user permutation derived deterministically from
+  the username, so two annotators do not walk the corpus in the same sequence, but each annotator's
+  own sequence is stable across sessions and restarts.
+
+Because of the second point, the integer in `/instances/<position>` is a position within *that user's*
+ordering, not a global instance number. The API returns the global index alongside the content, and
+that is what gets written to `instance_index` in the database, so exports and metrics remain
+comparable across users. A consequence worth planning for: independent permutations mean annotators
+overlap on the same instance only by chance, so inter-annotator agreement statistics accumulate
+slowly.
+
 ### Accounts
 
 The `admin` account is created once, on the first run, when `data/evaluation.db` does not yet exist.
@@ -93,8 +133,8 @@ You can open the app in your browser at http://localhost:5001. When doing the an
 | `/login` | GET, POST | – | Login form and submission |
 | `/signup` | GET, POST | Registration token | Account creation; 404 when `SIGNUP_TOKEN` is unset |
 | `/logout` | GET | Session | Logs the current user out |
-| `/instances/<index>` | GET | – | Annotation interface for one instance |
-| `/api/model-outputs/<index>` | GET | – | Prompt and completions, order randomised |
+| `/instances/<position>` | GET | – | Annotation interface for one instance, by position in the user's ordering |
+| `/api/model-outputs/<position>` | GET | – | Prompt and completions for that position; sides randomised, returns the global `instance_index` |
 | `/api/submit-evaluation` | POST | Session | Stores an acceptance/preference annotation |
 | `/api/submit-feedback` | POST | Session | Stores instance-quality feedback and comments |
 | `/summary` | GET | Session | Progress, contributions and agreement metrics as JSON |
