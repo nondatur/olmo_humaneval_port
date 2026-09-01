@@ -13,7 +13,7 @@ def _test_password_hash(password: str) -> str:
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app import app, db, User, EvaluationRecord
+from app import app, db, EVALUATION_QUESTIONS, User, EvaluationRecord
 
 
 @pytest.fixture(autouse=True)
@@ -213,6 +213,14 @@ class TestAnnotationFunctions:
 
 class TestAppInitialization:
     """Test application initialization and configuration."""
+
+    def test_instance_page_displays_configured_questions(self, client):
+        """Question copy comes from the startup-loaded configuration file."""
+        response = client.get('/instances/0')
+
+        assert response.status_code == 200
+        assert EVALUATION_QUESTIONS['acceptance_question_a'].encode() in response.data
+        assert b'name="a-is-acceptable"' in response.data
     
     def test_app_configuration(self):
         """Test basic app configuration."""

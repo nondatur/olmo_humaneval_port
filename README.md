@@ -47,6 +47,11 @@ The app is configured through environment variables. Nothing sensitive is stored
 | `ADMIN_PASSWORD` | On first run | Password for the initial `admin` account. The app refuses to start rather than fall back to a default password. |
 | `DATA_PATH` | Optional | Directory holding `evaluation.db`. Defaults to `./data`. |
 | `COMPARISON_DATA_PATH` | Under gunicorn | Path to the instances `.jsonl`. Only needed when the app is imported by a WSGI server; `python app.py` uses `--comparison_data_path` instead. |
+| `EVALUATION_QUESTIONS_PATH` | Optional | Path to the JSON file containing evaluator-facing question text. Defaults to `./evaluation_questions.json`. The file is read and validated at startup. |
+
+### Evaluation questions
+
+Evaluator-facing questions live in [`evaluation_questions.json`](evaluation_questions.json). Edit the text values there to rephrase the interface, then restart the app. The answer controls and stored answer values are intentionally not configured, so rewording questions does not change exports or metric processing. Set `EVALUATION_QUESTIONS_PATH` to use a configuration file elsewhere.
 
 Generate values with:
 

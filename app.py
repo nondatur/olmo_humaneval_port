@@ -52,7 +52,50 @@ login_manager.init_app(app)
 # GLOBAL VARIABLE for the comparison instances
 COMPARISON_INSTANCES=[]
 
-APP_VERSION = "v1.0.1"
+APP_VERSION = "v1.1.1"
+
+DEFAULT_QUESTIONS_CONFIG_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "evaluation_questions.json"
+)
+QUESTIONS_CONFIG_PATH = os.environ.get(
+    "EVALUATION_QUESTIONS_PATH", DEFAULT_QUESTIONS_CONFIG_PATH
+)
+REQUIRED_QUESTION_KEYS = {
+    "feedback_question",
+    "evaluation_intro",
+    "acceptance_question_a",
+    "acceptance_question_b",
+    "preference_question",
+}
+
+
+def load_evaluation_questions(config_path):
+    """Read the evaluator-facing question text without changing answer values."""
+    try:
+        with open(config_path, "r", encoding="utf-8") as config_file:
+            questions = json.load(config_file)
+    except (OSError, json.JSONDecodeError) as error:
+        raise RuntimeError(
+            f"Could not load evaluation questions from {config_path}: {error}"
+        ) from error
+
+    if not isinstance(questions, dict):
+        raise RuntimeError("Evaluation questions configuration must be a JSON object.")
+
+    missing_keys = REQUIRED_QUESTION_KEYS - questions.keys()
+    invalid_keys = [key for key in REQUIRED_QUESTION_KEYS if not isinstance(questions.get(key), str)]
+    if missing_keys or invalid_keys:
+        details = []
+        if missing_keys:
+            details.append("missing: " + ", ".join(sorted(missing_keys)))
+        if invalid_keys:
+            details.append("must be strings: " + ", ".join(sorted(invalid_keys)))
+        raise RuntimeError("Invalid evaluation questions configuration (" + "; ".join(details) + ").")
+
+    return questions
+
+
+EVALUATION_QUESTIONS = load_evaluation_questions(QUESTIONS_CONFIG_PATH)
 
 
 @app.context_processor
@@ -154,7 +197,12 @@ def index():
 
 @app.route('/instances/<int:index>')
 def instances(index):
-    return render_template('index.html', index=index, current_user=current_user)
+    return render_template(
+        'index.html',
+        index=index,
+        current_user=current_user,
+        questions=EVALUATION_QUESTIONS,
+    )
 
 
 def _stable_seed(*parts):

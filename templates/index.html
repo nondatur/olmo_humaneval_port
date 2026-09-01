@@ -40,7 +40,7 @@
 
             <form>
                 <div class="form-group">
-                    <p>Do you find the instance interesting, invalid, or too hard to complete? Please let us know by giving feedback here! (Optional)</p>
+                    <p>{{ questions.feedback_question }}</p>
                     <div class="form-check form-check-inline">
                         <input class="form-check-input" type="radio" name="instance-quality" id="instance-quality-good" value="good">
                         <label class="form-check-label" for="instance-quality-good">This example is interesting.</label>
@@ -119,7 +119,7 @@
                         <button class="role-icon">📝</button>
                     </div>
                     <div class="col message-col">
-                        <h5>Now please evaluate the two outputs based on your knowledge, preference, and any external tools (e.g., Google Search or Translate).</h5>
+                        <h5>{{ questions.evaluation_intro }}</h5>
                     </div>
                 </div>
 
@@ -129,7 +129,7 @@
                     <div class="col">
                         <form style="font-size: 18px;">
                             <div class="form-group eval-form-item">
-                                <p>Q1: Is output A an acceptable response? An acceptable response should ① answer the user requests ② have no significant errors ③ have no meaningless text (e.g., repetition).</p>
+                                <p>{{ questions.acceptance_question_a }}</p>
                                 <div class="form-check form-check-inline">
                                     <input class="form-check-input" type="radio" name="a-is-acceptable" id="a-is-acceptable-yes" value="yes">
                                     <label class="form-check-label" for="a-is-acceptable-yes">Yes</label>
@@ -140,7 +140,7 @@
                                 </div>
                             </div>
                             <div class="form-group eval-form-item">
-                                <p>Q2: Is output B an acceptable response? An acceptable response should ① answer the user requests ② have no significant errors ③ have no meaningless text (e.g., repetition).</p>
+                                <p>{{ questions.acceptance_question_b }}</p>
                                 <div class="form-check form-check-inline">
                                     <input class="form-check-input" type="radio" name="b-is-acceptable" id="b-is-acceptable-yes" value="yes">
                                     <label class="form-check-label" for="b-is-acceptable-yes">Yes</label>
@@ -151,7 +151,7 @@
                                 </div>
                             </div>
                             <div class="form-group eval-form-item">
-                                <p>Q3: Please choose the response that you prefer.</p>
+                                <p>{{ questions.preference_question }}</p>
                                 <div class="btn-group" role="group">
                                     <input type="radio" class="btn-check" name="preference-selection" id="preference-selection-a-better" value="a-is-better" autocomplete="off">
                                     <label class="btn btn-secondary" for="preference-selection-a-better" style="font-size: 15px;">A is clearly better</label>
