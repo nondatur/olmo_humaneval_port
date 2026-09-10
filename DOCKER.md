@@ -34,6 +34,13 @@ docker run --rm \
 Open http://localhost:5001. The local values above are throwaway values only.
 For a local Python run with the same defaults, use `./run_local.sh` instead.
 
+If you keep local fixtures under `test-data`, create `data` as a symlink first so local Docker mounts and local scripts stay consistent:
+
+```bash
+rm -rf data
+ln -s test-data data
+```
+
 ### Use Another Data File
 
 The image defaults to `COMPARISON_DATA_PATH=/app/data/eval_instances.jsonl`.
@@ -78,6 +85,7 @@ Never run the development server where annotators can reach it.
 | `ADMIN_PASSWORD` | First run | Password for the initial `admin` account. Required when the database is created. |
 | `DATA_PATH` | Optional | Database directory. Defaults to `/app/data` in the image. |
 | `COMPARISON_DATA_PATH` | Optional | Instance `.jsonl` loaded at startup. Defaults to `/app/data/eval_instances.jsonl` in the image. |
+| `EVALUATION_QUESTIONS_PATH` | Optional | Evaluator-facing question config JSON. Defaults to `/app/data/evaluation_questions.json`. |
 | `PORT` | No | Set by Cloud Run; gunicorn binds to it, falling back to `5001`. |
 | `PYTHONDONTWRITEBYTECODE` | No | Set by the Dockerfile to prevent `.pyc` files. |
 | `PYTHONUNBUFFERED` | No | Set by the Dockerfile for immediate log output. |

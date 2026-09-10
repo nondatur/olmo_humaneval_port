@@ -26,7 +26,6 @@ async function rendere_instance(index) {
 
     clear_all();
     current_instance_index = data.instance_index;
-    $("#instance-id").html(`Instance ${index + 1} of ${data.total}`);
 
     // let's use a unified format here that support multiple messages, though currently we only have one user prompt.
     var messages = [{"role": "user", "text": data.prompt}];
@@ -38,7 +37,7 @@ async function rendere_instance(index) {
 
         var $message_element = $("<div></div>").addClass("row").html(`
             <div class="col icon-col">
-                <button class="role-icon">${icon}</button>
+                <button class="role-icon" disabled>${icon}</button>
             </div>
             <div class="col message-col history-message-col">
                 <xmp class="message-text">${message.text}</xmp>
@@ -69,7 +68,7 @@ function clear_all() {
     $('#history-message-region').html(`
         <div class="row">
             <div class="col icon-col">
-                <button class="role-icon">🧑</button>
+                <button class="role-icon" disabled>🧑</button>
             </div>
             <div class="col message-col history-message-col">
                 <xmp class="message-text"></xmp>
@@ -132,8 +131,20 @@ async function submit_evaluation() {
         if (response.status == 200) {
             show_alert("Evaluation data is submitted successfully.", "success", insert_after_selector="#evaluation-submit", timeoutput=5000);
             console.log("Evaluation data is submitted successfully.");
-            current_index++;
-            rendere_instance(current_index);
+            updateProgressBar();
+            // Only move to next instance after submit
+            setTimeout(() => {
+                current_index++;
+                rendere_instance(current_index);
+                updateProgressBarAsync();
+            }, 500);
+        }
+        else if (response.status == 409) {
+            show_alert("You already submitted feedback for this instance. Moving to next...", "warning", insert_after_selector="#evaluation-submit", timeoutput=5000);
+            setTimeout(() => {
+                current_index++;
+                rendere_instance(current_index);
+            }, 1500);
         }
         else if (response.status == 401) {
             show_alert("You need to log in to submit evaluation data.", "danger", insert_after_selector="#evaluation-submit", timeoutput=5000);
@@ -223,17 +234,54 @@ $("#feedback-submit").click(function () {
     submit_feedback();
 });
 
-// Add event listeners for the navigation buttons
-$('#prev-button').click(function () {
-    if (current_index > 0) {
-        // redirect to the previous instance using url
-        window.location.href = `/instances/${current_index - 1}`;
-    } else {
-        show_alert("You are already on the first instance.", "danger");
-    }
-});
+// Navigation is now forward-only - prev button is disabled in template
+// Users can only move forward through instances via Submit button
 
-$("#next-button").click(function () {
-    // redirect to the next instance using url
-    window.location.href = `/instances/${current_index + 1}`;
+// Function to update the progress bar
+async function updateProgressBar() {
+    try {
+        console.log("Fetching user progress...");
+        const response = await fetch('/api/user-progress');
+        console.log("Response status:", response.status);
+        const data = await response.json();
+        console.log("Progress data:", data);
+        
+        if (response.status === 200) {
+            const percentage = data.percentage;
+            const completed = data.completed;
+            const total = data.total;
+            
+            console.log("Updating progress bar to", percentage, "%");
+            
+            // Update progress bar
+            $('#progress-bar')
+                .css('width', percentage + '%')
+                .attr('aria-valuenow', percentage);
+            
+            // Update progress text
+            $('#progress-text').text(`Completed evaluations: ${completed} / ${total}`);
+            console.log("Progress text updated");
+            
+            // Update progress bar background color based on completion
+            if (percentage === 100) {
+                $('#progress-bar').addClass('bg-success').removeClass('bg-primary');
+            }
+        }
+    } catch (error) {
+        console.error("Error fetching progress:", error);
+    }
+}
+
+// Update progress bar after instance is loaded (non-blocking)
+function updateProgressBarAsync() {
+    console.log("updateProgressBarAsync called");
+    updateProgressBar().catch(err => console.log("Progress bar update failed, but that's OK"));
+}
+
+// Update progress bar when page loads (non-blocking)
+$(document).ready(function() {
+    console.log("Document ready - scheduling progress bar update");
+    // Initialize with loading state
+    $('#progress-text').text('Loading...');
+    setTimeout(updateProgressBarAsync, 500); // Small delay to ensure instance is loaded
 });

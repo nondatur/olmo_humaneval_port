@@ -27,20 +27,17 @@
             </div>
 
             <div class="row" id="instance-info">
-                <div class="col-2 text-center">
-                    <button id="prev-button" class="btn btn-sm btn-primary"><</button>
-                </div> 
-                <div class="col-8 text-center">
-                    <h4 id="instance-id" class="mb-5 text-center">Instance {{ index }}</h4>
-                </div>
-                <div class="col-2 text--center">
-                    <button id="next-button" class="btn btn-sm btn-primary">></button>
+                <div class="col-12 text-center">
+                    <div class="progress" style="height: 30px;">
+                        <div id="progress-bar" class="progress-bar" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                    <small class="text-muted" id="progress-text" style="display: block; margin-top: 5px;">-</small>
                 </div>
             </div>
 
             <form>
                 <div class="form-group">
-                    <p>{{ questions.feedback_question }}</p>
+                    <p><strong>Optional:</strong> {{ questions.feedback_question }}</p>
                     <div class="form-check form-check-inline">
                         <input class="form-check-input" type="radio" name="instance-quality" id="instance-quality-good" value="good">
                         <label class="form-check-label" for="instance-quality-good">This example is interesting.</label>
@@ -61,6 +58,8 @@
                 <div class="mt-2 text-center">
                     <button id="feedback-submit" type="submit" class="btn btn-primary mt-2">Provide feedback</button>
                 </div>
+                <div class="mt-3">
+                </div>
             </form>
         </div>
 
@@ -69,7 +68,7 @@
                 <!-- add messages dynamically here. Following is the initial one. -->
                 <div class="row">
                     <div class="col icon-col">
-                        <button class="role-icon">🧑</button>
+                        <button class="role-icon" disabled>🧑</button>
                     </div>
                     <div class="col message-col history-message-col">
                         <xmp class="message-text">Loading instance.</xmp>
@@ -79,7 +78,7 @@
             <div id="model-outputs-region">
                 <div class="row">
                     <div class="col icon-col">
-                        <button class="role-icon">🤖</button>
+                        <button class="role-icon" disabled>🤖</button>
                     </div>
                     <div class="col message-col">
                         <p class="message-text">Here are responses from two AI models.</p>
@@ -116,7 +115,7 @@
             <div id="evaluation-region">
                 <div class="row">
                     <div class="col icon-col">
-                        <button class="role-icon">📝</button>
+                        <button class="role-icon" disabled>📝</button>
                     </div>
                     <div class="col message-col">
                         <h5>{{ questions.evaluation_intro }}</h5>
@@ -129,7 +128,7 @@
                     <div class="col">
                         <form style="font-size: 18px;">
                             <div class="form-group eval-form-item">
-                                <p>{{ questions.acceptance_question_a }}</p>
+                                <p>{{ questions.acceptance_question_a|safe }}</p>
                                 <div class="form-check form-check-inline">
                                     <input class="form-check-input" type="radio" name="a-is-acceptable" id="a-is-acceptable-yes" value="yes">
                                     <label class="form-check-label" for="a-is-acceptable-yes">Yes</label>
@@ -140,7 +139,7 @@
                                 </div>
                             </div>
                             <div class="form-group eval-form-item">
-                                <p>{{ questions.acceptance_question_b }}</p>
+                                <p>{{ questions.acceptance_question_b|safe }}</p>
                                 <div class="form-check form-check-inline">
                                     <input class="form-check-input" type="radio" name="b-is-acceptable" id="b-is-acceptable-yes" value="yes">
                                     <label class="form-check-label" for="b-is-acceptable-yes">Yes</label>
@@ -151,26 +150,26 @@
                                 </div>
                             </div>
                             <div class="form-group eval-form-item">
-                                <p>{{ questions.preference_question }}</p>
+                                <p>{{ questions.preference_question|safe }}</p>
                                 <div class="btn-group" role="group">
                                     <input type="radio" class="btn-check" name="preference-selection" id="preference-selection-a-better" value="a-is-better" autocomplete="off">
-                                    <label class="btn btn-secondary" for="preference-selection-a-better" style="font-size: 15px;">A is clearly better</label>
+                                    <label class="btn btn-secondary" for="preference-selection-a-better" style="font-size: 1.1em; padding: 0.6em 1.2em;">{{ questions.preference_label_a_clearly_better }}</label>
                                   
                                     <input type="radio" class="btn-check" name="preference-selection" id="preference-selection-a-slightly-better" value="a-is-slightly-better" autocomplete="off">
-                                    <label class="btn btn-secondary" for="preference-selection-a-slightly-better" style="font-size: 15px;">A is slightly better</label>
+                                    <label class="btn btn-secondary" for="preference-selection-a-slightly-better" style="font-size: 1.1em; padding: 0.6em 1.2em;">{{ questions.preference_label_a_slightly_better }}</label>
 
                                     <input type="radio" class="btn-check" name="preference-selection" id="preference-selection-tie" value="tie" autocomplete="off">
-                                    <label class="btn btn-secondary" for="preference-selection-tie" style="font-size: 15px;">Tie</label>
+                                    <label class="btn btn-secondary" for="preference-selection-tie" style="font-size: 1.1em; padding: 0.6em 1.2em;">{{ questions.preference_label_tie }}</label>
 
                                     <input type="radio" class="btn-check" name="preference-selection" id="preference-selection-b-slightly-better" value="b-is-slightly-better" autocomplete="off">
-                                    <label class="btn btn-secondary" for="preference-selection-b-slightly-better" style="font-size: 15px;">B is slightly better</label>
+                                    <label class="btn btn-secondary" for="preference-selection-b-slightly-better" style="font-size: 1.1em; padding: 0.6em 1.2em;">{{ questions.preference_label_b_slightly_better }}</label>
 
                                     <input type="radio" class="btn-check" name="preference-selection" id="preference-selection-b-better" value="b-is-better" autocomplete="off">
-                                    <label class="btn btn-secondary" for="preference-selection-b-better" style="font-size: 15px;">B is clearly better</label>
+                                    <label class="btn btn-secondary" for="preference-selection-b-better" style="font-size: 1.1em; padding: 0.6em 1.2em;">{{ questions.preference_label_b_clearly_better }}</label>
                                 </div>
                             </div>
                             <div class="mt-5" style="text-align: center;">
-                                <button type="submit" class="btn btn-primary" id="evaluation-submit">Submit</button>
+                                <button type="submit" class="btn btn-primary" id="evaluation-submit" style="font-size: 1.1em; padding: 0.7em 2em;">Submit</button>
                             </div>
                         </form>
                     </div>

@@ -1,7 +1,0 @@
-{
-  "feedback_question": "Do you find the instance interesting, invalid, or too hard to complete? Please let us know by giving feedback here! (Optional)",
-  "evaluation_intro": "Now please evaluate the two outputs based on your knowledge, preference, and any external tools (e.g., Google Search or Translate).",
-  "acceptance_question_a": "Q1: Is output A an acceptable response? An acceptable response should answer the user requests, have no significant errors, and have no meaningless text (e.g., repetition).",
-  "acceptance_question_b": "Q2: Is output B an acceptable response? An acceptable response should answer the user requests, have no significant errors, and have no meaningless text (e.g., repetition).",
-  "preference_question": "Q3: Please choose the response that you prefer."
-}

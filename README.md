@@ -47,11 +47,22 @@ The app is configured through environment variables. Nothing sensitive is stored
 | `ADMIN_PASSWORD` | On first run | Password for the initial `admin` account. The app refuses to start rather than fall back to a default password. |
 | `DATA_PATH` | Optional | Directory holding `evaluation.db`. Defaults to `./data`. |
 | `COMPARISON_DATA_PATH` | Under gunicorn | Path to the instances `.jsonl`. Only needed when the app is imported by a WSGI server; `python app.py` uses `--comparison_data_path` instead. |
-| `EVALUATION_QUESTIONS_PATH` | Optional | Path to the JSON file containing evaluator-facing question text. Defaults to `./evaluation_questions.json`. The file is read and validated at startup. |
+| `EVALUATION_QUESTIONS_PATH` | Optional | Path to the JSON file containing evaluator-facing question text. Defaults to `./data/evaluation_questions.json`. The file is read and validated at startup. |
 
 ### Evaluation questions
 
-Evaluator-facing questions live in [`evaluation_questions.json`](evaluation_questions.json). Edit the text values there to rephrase the interface, then restart the app. The answer controls and stored answer values are intentionally not configured, so rewording questions does not change exports or metric processing. Set `EVALUATION_QUESTIONS_PATH` to use a configuration file elsewhere.
+Evaluator-facing questions live in [`data/evaluation_questions.json`](data/evaluation_questions.json). Edit the text values there to rephrase the interface, then restart the app. The answer controls and stored answer values are intentionally not configured, so rewording questions does not change exports or metric processing. Set `EVALUATION_QUESTIONS_PATH` to use a configuration file elsewhere.
+
+### Local data setup from test-data
+
+For local runs and local checks in this repository, keep `data` as a symlink to `test-data` so all scripts and defaults resolve to the same files:
+
+```bash
+rm -rf data
+ln -s test-data data
+```
+
+This makes paths like `data/eval_instances.jsonl` and `data/evaluation_questions.json` resolve to the fixtures under `test-data`.
 
 Generate values with:
 
@@ -77,19 +88,19 @@ For local testing there are two helper scripts. Both set the same throwaway cred
 `run_local.sh` runs the Flask development server, which supports `--debug` and reloads on change:
 
 ```bash
-./run_local.sh                                          # defaults
-DATA_FILE=data/eval_instances_tulu_1.jsonl ./run_local.sh
-PORT=8080 ./run_local.sh --debug
+./run_local.sh                                             # defaults
+DATA_FILE=data/eval_instances_tulu_1.jsonl ./run_local.sh  # change default dataset
+PORT=8080 ./run_local.sh --debug                           # run in debug mode on custom port
 ```
 
 `run_gunicorn_local.sh` runs gunicorn exactly as the container does, so use it to check anything
 that depends on the production server rather than the dev one:
 
 ```bash
-./run_gunicorn_local.sh                                 # defaults
-DATA_FILE=data/eval_instances_tulu_1.jsonl ./run_gunicorn_local.sh
-PORT=8080 WORKERS=1 THREADS=8 ./run_gunicorn_local.sh
-./run_gunicorn_local.sh --reload                        # extra flags pass through to gunicorn
+./run_gunicorn_local.sh                                             # defaults
+DATA_FILE=data/eval_instances_tulu_1.jsonl ./run_gunicorn_local.sh  # change default dataset
+PORT=8080 WORKERS=1 THREADS=8 ./run_gunicorn_local.sh               # run on custom port w. custom threading
+./run_gunicorn_local.sh --reload                                    # extra flags pass through to gunicorn
 ```
 
 It defaults to `data/eval_instances.jsonl` (the file the image loads) rather than the
@@ -159,8 +170,9 @@ You can open the app in your browser at http://localhost:5001. When doing the an
 | `/logout` | GET | Session | Logs the current user out |
 | `/instances/<position>` | GET | – | Annotation interface for one instance, by position in the user's ordering |
 | `/api/model-outputs/<position>` | GET | – | Prompt and completions for that position; sides randomised, returns the global `instance_index` |
-| `/api/submit-evaluation` | POST | Session | Stores an acceptance/preference annotation |
-| `/api/submit-feedback` | POST | Session | Stores instance-quality feedback and comments |
+| `/api/submit-evaluation` | POST | Session | Stores an acceptance/preference annotation; returns `409` if this user already submitted that instance |
+| `/api/submit-feedback` | POST | Session | Stores instance-quality feedback and comments; returns `409` if this user already submitted that instance |
+| `/api/user-progress` | GET | Session | Returns per-user completion progress: `completed`, `total`, `percentage` |
 | `/summary` | GET | Session | Progress, contributions and agreement metrics as JSON |
 | `/export_results` | GET | Session | Downloads all annotations as an `.xlsx` file |
 

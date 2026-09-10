@@ -11,6 +11,7 @@ ENV FLASK_APP=app.py
 ENV FLASK_ENV=production
 ENV DATA_PATH=/app/data
 ENV COMPARISON_DATA_PATH=/app/data/eval_instances.jsonl
+ENV EVALUATION_QUESTIONS_PATH=/app/data/evaluation_questions.json
 
 # Copy requirements first to leverage Docker cache
 COPY requirements.txt .
@@ -18,7 +19,7 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip --timeout=1000 install --trusted-host pypi.python.org --trusted-host pypi.org --trusted-host=files.pythonhosted.org --no-cache-dir -r requirements.txt
 
-# Copy application code (excluding data directory which will be mounted)
+# Copy application code; runtime mounts can overlay /app/data
 COPY . /app
 
 # Ensure data directory exists for GCS mount

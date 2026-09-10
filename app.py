@@ -55,7 +55,7 @@ COMPARISON_INSTANCES=[]
 APP_VERSION = "v1.1.1"
 
 DEFAULT_QUESTIONS_CONFIG_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "evaluation_questions.json"
+    os.path.dirname(os.path.abspath(__file__)), "data", "evaluation_questions.json"
 )
 QUESTIONS_CONFIG_PATH = os.environ.get(
     "EVALUATION_QUESTIONS_PATH", DEFAULT_QUESTIONS_CONFIG_PATH
@@ -91,6 +91,20 @@ def load_evaluation_questions(config_path):
         if invalid_keys:
             details.append("must be strings: " + ", ".join(sorted(invalid_keys)))
         raise RuntimeError("Invalid evaluation questions configuration (" + "; ".join(details) + ").")
+
+    # Add optional button labels with defaults
+    defaults = {
+        "preference_label_a_clearly_better": "A is clearly better",
+        "preference_label_a_slightly_better": "A is slightly better",
+        "preference_label_tie": "Tie",
+        "preference_label_b_slightly_better": "B is slightly better",
+        "preference_label_b_clearly_better": "B is clearly better",
+    }
+    for key, default_value in defaults.items():
+        if key not in questions:
+            questions[key] = default_value
+        elif not isinstance(questions[key], str):
+            questions[key] = default_value
 
     return questions
 
@@ -140,7 +154,9 @@ def login():
         user = User.query.filter_by(username=username).first()
         if user and check_password_hash(user.password, password):
             login_user(user)
-            return redirect(url_for('index'))
+            # Redirect to first unsubmitted instance
+            first_pos = get_first_unsubmitted_position()
+            return redirect(url_for('instances', index=first_pos))
         else:
             return 'Invalid username or password'
     else:
@@ -190,7 +206,8 @@ def logout():
 def index():
     # check if the user is logged in
     if current_user.is_authenticated:
-        return redirect(url_for('instances', index=0, current_user=current_user))
+        first_pos = get_first_unsubmitted_position()
+        return redirect(url_for('instances', index=first_pos, current_user=current_user))
     else:
         return redirect(url_for('login'))
 
@@ -224,6 +241,40 @@ def _instance_order(user_key, num_instances):
 def instance_order():
     """Global instance indices in the order this user should evaluate them."""
     return _instance_order(_user_key(), len(COMPARISON_INSTANCES))
+
+
+def get_first_unsubmitted_position():
+    """Get the position in the user's personal ordering of the first unsubmitted instance."""
+    if not current_user.is_authenticated:
+        return 0
+    
+    order = instance_order()
+    user_records = EvaluationRecord.query.filter_by(evaluator=current_user.username).all()
+    completed_indices = set(record.instance_index for record in user_records)
+    
+    for position, global_index in enumerate(order):
+        if global_index not in completed_indices:
+            return position
+    
+    # All instances completed, return last position
+    return len(order) - 1
+
+
+def get_first_unsubmitted_position():
+    """Get the position in the user's personal ordering of the first unsubmitted instance."""
+    if not current_user.is_authenticated:
+        return 0
+    
+    order = instance_order()
+    user_records = EvaluationRecord.query.filter_by(evaluator=current_user.username).all()
+    completed_indices = set(record.instance_index for record in user_records)
+    
+    for position, global_index in enumerate(order):
+        if global_index not in completed_indices:
+            return position
+    
+    # All instances completed, return last position
+    return len(order) - 1
 
 
 def ordered_completions(instance):
@@ -483,6 +534,15 @@ def submit_evaluation():
     instance_index = evaluation_data["index"]
     if not isinstance(instance_index, int) or not 0 <= instance_index < len(COMPARISON_INSTANCES):
         return jsonify({"error": "Invalid instance index"}), 400
+    
+    # Check if user already submitted for this instance
+    existing_record = EvaluationRecord.query.filter_by(
+        evaluator=current_user.username,
+        instance_index=instance_index
+    ).first()
+    if existing_record:
+        return jsonify({"error": "You already submitted feedback for this instance. Cannot submit twice."}), 409
+    
     # write to the database
     new_record = EvaluationRecord(
         instance_index=instance_index,
@@ -514,6 +574,15 @@ def submit_feedback():
     instance_index = feedback_data["index"]
     if not isinstance(instance_index, int) or not 0 <= instance_index < len(COMPARISON_INSTANCES):
         return jsonify({"error": "Invalid instance index"}), 400
+    
+    # Check if user already submitted for this instance
+    existing_record = EvaluationRecord.query.filter_by(
+        evaluator=current_user.username,
+        instance_index=instance_index
+    ).first()
+    if existing_record:
+        return jsonify({"error": "You already submitted feedback for this instance. Cannot submit twice."}), 409
+    
     # write to the database
     new_record = EvaluationRecord(
         instance_index=instance_index,
@@ -536,6 +605,20 @@ def submit_feedback():
     return jsonify({"message": "Evaluation data submitted successfully"}), 200
 
 
+@app.route("/api/user-progress", methods=["GET"])
+@login_required
+def get_user_progress():
+    """Return the current user's evaluation progress."""
+    user_records = EvaluationRecord.query.filter_by(evaluator=current_user.username).all()
+    completed = len(user_records)
+    total = len(COMPARISON_INSTANCES)
+    return jsonify({
+        "completed": completed,
+        "total": total,
+        "percentage": int((completed / total * 100) if total > 0 else 0)
+    }), 200
+
+
 def bootstrap_database():
     if os.path.exists(DB_PATH):
         return
@@ -544,7 +627,7 @@ def bootstrap_database():
         raise SystemExit("ADMIN_PASSWORD is not set; refusing to create the admin account.")
     with app.app_context():
         db.create_all()
-        new_user = User(username="admin", password=generate_password_hash(admin_password))
+        new_user = User(username="admin", password=generate_password_hash(admin_password, method='pbkdf2'))
         db.session.add(new_user)
         db.session.commit()
 
