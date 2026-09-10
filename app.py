@@ -256,23 +256,9 @@ def get_first_unsubmitted_position():
         if global_index not in completed_indices:
             return position
     
-    # All instances completed, return last position
-    return len(order) - 1
-
-
-def get_first_unsubmitted_position():
-    """Get the position in the user's personal ordering of the first unsubmitted instance."""
-    if not current_user.is_authenticated:
+    if not order:
         return 0
-    
-    order = instance_order()
-    user_records = EvaluationRecord.query.filter_by(evaluator=current_user.username).all()
-    completed_indices = set(record.instance_index for record in user_records)
-    
-    for position, global_index in enumerate(order):
-        if global_index not in completed_indices:
-            return position
-    
+
     # All instances completed, return last position
     return len(order) - 1
 
