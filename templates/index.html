@@ -29,9 +29,9 @@
             <div class="row" id="instance-info">
                 <div class="col-12 text-center">
                     <div class="progress" style="height: 30px;">
-                        <div id="progress-bar" class="progress-bar" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                        <div id="progress-bar" class="progress-bar" role="progressbar" style="width: {{ progress.percentage }}%" aria-valuenow="{{ progress.percentage }}" aria-valuemin="0" aria-valuemax="100">{{ progress.percentage }}%</div>
                     </div>
-                    <small class="text-muted" id="progress-text" style="display: block; margin-top: 5px;">-</small>
+                    <small class="text-muted" id="progress-text" style="display: block; margin-top: 5px;">Completed evaluations: {{ progress.completed }} / {{ progress.total }}</small>
                 </div>
             </div>
 

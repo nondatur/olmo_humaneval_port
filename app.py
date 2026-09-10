@@ -214,11 +214,13 @@ def index():
 
 @app.route('/instances/<int:index>')
 def instances(index):
+    progress = get_user_progress_payload(current_user.username if current_user.is_authenticated else None)
     return render_template(
         'index.html',
         index=index,
         current_user=current_user,
         questions=EVALUATION_QUESTIONS,
+        progress=progress,
     )
 
 
@@ -261,6 +263,29 @@ def get_first_unsubmitted_position():
 
     # All instances completed, return last position
     return len(order) - 1
+
+
+def get_user_progress_payload(username=None):
+    """Compute user progress with unique instance counts and bounded percentage."""
+    total = len(COMPARISON_INSTANCES)
+    if not username:
+        return {"completed": 0, "total": total, "percentage": 0}
+
+    user_records = EvaluationRecord.query.filter_by(evaluator=username).all()
+    completed_indices = {record.instance_index for record in user_records}
+    completed = len(completed_indices)
+
+    if total == 0:
+        percentage = 0
+    else:
+        percentage = int((completed / total) * 100)
+        percentage = max(0, min(100, percentage))
+
+    return {
+        "completed": completed,
+        "total": total,
+        "percentage": percentage,
+    }
 
 
 def ordered_completions(instance):
@@ -543,7 +568,7 @@ def submit_evaluation():
         preference=evaluation_data["preference"],
         instance_quality="",
         comment="",
-        evaluator=evaluation_data["evaluator"],
+        evaluator=current_user.username,
         timestamp=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
     )
     db.session.add(new_record)
@@ -583,7 +608,7 @@ def submit_feedback():
         preference="",
         instance_quality=feedback_data["instance_quality"],
         comment=feedback_data["comment"],
-        evaluator=feedback_data["evaluator"],
+        evaluator=current_user.username,
         timestamp=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
     )
     db.session.add(new_record)
@@ -595,14 +620,7 @@ def submit_feedback():
 @login_required
 def get_user_progress():
     """Return the current user's evaluation progress."""
-    user_records = EvaluationRecord.query.filter_by(evaluator=current_user.username).all()
-    completed = len(user_records)
-    total = len(COMPARISON_INSTANCES)
-    return jsonify({
-        "completed": completed,
-        "total": total,
-        "percentage": int((completed / total * 100) if total > 0 else 0)
-    }), 200
+    return jsonify(get_user_progress_payload(current_user.username)), 200
 
 
 def bootstrap_database():

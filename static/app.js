@@ -240,32 +240,30 @@ $("#feedback-submit").click(function () {
 // Function to update the progress bar
 async function updateProgressBar() {
     try {
-        console.log("Fetching user progress...");
         const response = await fetch('/api/user-progress');
-        console.log("Response status:", response.status);
+        if (response.status !== 200) {
+            return;
+        }
         const data = await response.json();
-        console.log("Progress data:", data);
         
-        if (response.status === 200) {
-            const percentage = data.percentage;
-            const completed = data.completed;
-            const total = data.total;
-            
-            console.log("Updating progress bar to", percentage, "%");
-            
-            // Update progress bar
-            $('#progress-bar')
-                .css('width', percentage + '%')
-                .attr('aria-valuenow', percentage);
-            
-            // Update progress text
-            $('#progress-text').text(`Completed evaluations: ${completed} / ${total}`);
-            console.log("Progress text updated");
-            
-            // Update progress bar background color based on completion
-            if (percentage === 100) {
-                $('#progress-bar').addClass('bg-success').removeClass('bg-primary');
-            }
+        const percentage = Math.max(0, Math.min(100, Number(data.percentage) || 0));
+        const completed = Number(data.completed) || 0;
+        const total = Number(data.total) || 0;
+
+        // Update progress bar
+        $('#progress-bar')
+            .css('width', percentage + '%')
+            .attr('aria-valuenow', percentage)
+            .text(`${percentage}%`);
+
+        // Update progress text
+        $('#progress-text').text(`Completed evaluations: ${completed} / ${total}`);
+
+        // Update progress bar background color based on completion
+        if (percentage === 100) {
+            $('#progress-bar').addClass('bg-success').removeClass('bg-primary');
+        } else {
+            $('#progress-bar').addClass('bg-primary').removeClass('bg-success');
         }
     } catch (error) {
         console.error("Error fetching progress:", error);
@@ -274,14 +272,10 @@ async function updateProgressBar() {
 
 // Update progress bar after instance is loaded (non-blocking)
 function updateProgressBarAsync() {
-    console.log("updateProgressBarAsync called");
     updateProgressBar().catch(err => console.log("Progress bar update failed, but that's OK"));
 }
 
 // Update progress bar when page loads (non-blocking)
 $(document).ready(function() {
-    console.log("Document ready - scheduling progress bar update");
-    // Initialize with loading state
-    $('#progress-text').text('Loading...');
     setTimeout(updateProgressBarAsync, 500); // Small delay to ensure instance is loaded
 });
