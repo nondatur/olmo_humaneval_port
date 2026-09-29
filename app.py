@@ -624,16 +624,18 @@ def get_user_progress():
 
 
 def bootstrap_database():
-    if os.path.exists(DB_PATH):
-        return
-    admin_password = os.environ.get('ADMIN_PASSWORD')
-    if not admin_password:
-        raise SystemExit("ADMIN_PASSWORD is not set; refusing to create the admin account.")
     with app.app_context():
         db.create_all()
-        new_user = User(username="admin", password=generate_password_hash(admin_password, method='pbkdf2'))
-        db.session.add(new_user)
-        db.session.commit()
+        if not User.query.filter_by(username="admin").first():
+            admin_password = os.environ.get('ADMIN_PASSWORD')
+            if not admin_password:
+                raise SystemExit("ADMIN_PASSWORD is not set; refusing to create the admin account.")
+            new_user = User(
+                username="admin",
+                password=generate_password_hash(admin_password, method='pbkdf2')
+            )
+            db.session.add(new_user)
+            db.session.commit()
 
 
 def init_app(comparison_data_path):

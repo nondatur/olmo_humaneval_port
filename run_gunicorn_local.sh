@@ -10,7 +10,9 @@ export SIGNUP_TOKEN="dev-signup-token"
 export ADMIN_PASSWORD="admin"
 
 # Matches the container default so local runs mirror the deployment
-DATA_FILE="${DATA_FILE:-data/eval_instances.jsonl}"
+#DATA_FILE="${DATA_FILE:-data/eval_instances.jsonl}"
+
+DATA_FILE="${DATA_FILE:-data/pairwise_completions.jsonl}"
 HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-5001}"
 WORKERS="${WORKERS:-1}"
