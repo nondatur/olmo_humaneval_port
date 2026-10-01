@@ -14,6 +14,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app import app, db, EVALUATION_QUESTIONS, User, EvaluationRecord
+import app as app_module
 
 
 @pytest.fixture(autouse=True)
@@ -242,3 +243,67 @@ class TestAppInitialization:
                     # The test ensures the data loading part works
                 except SystemExit:
                     pass  # main() calls sys.exit(), which is expected in testing
+
+
+class TestSubmissionFlow:
+    """Evaluation and optional feedback can both be recorded once per instance."""
+
+    @pytest.fixture(autouse=True)
+    def comparison_data(self, sample_comparison_data, monkeypatch):
+        monkeypatch.setattr(app_module, 'COMPARISON_INSTANCES', sample_comparison_data)
+
+    def login(self, client):
+        response = client.post('/login', data={
+            'username': 'testuser',
+            'password': 'testpass'
+        })
+        assert response.status_code == 302
+
+    def feedback_payload(self):
+        return {
+            'index': 0,
+            'model_a': 'model_a',
+            'model_b': 'model_b',
+            'prompt': 'Test prompt',
+            'completion_a': 'Response A',
+            'completion_b': 'Response B',
+            'instance_quality': 'good',
+            'comment': 'Useful example',
+        }
+
+    def evaluation_payload(self):
+        return {
+            'index': 0,
+            'model_a': 'model_a',
+            'model_b': 'model_b',
+            'prompt': 'Test prompt',
+            'completion_a': 'Response A',
+            'completion_b': 'Response B',
+            'completion_a_is_acceptable': 'yes',
+            'completion_b_is_acceptable': 'no',
+            'preference': 'a-is-better',
+        }
+
+    def test_feedback_then_evaluation_both_succeed_and_progress_counts_evaluation(self, client):
+        self.login(client)
+
+        feedback_response = client.post('/api/submit-feedback', json=self.feedback_payload())
+        assert feedback_response.status_code == 200
+        assert client.get('/api/user-progress').json['completed'] == 0
+
+        evaluation_response = client.post('/api/submit-evaluation', json=self.evaluation_payload())
+        assert evaluation_response.status_code == 200
+        assert client.get('/api/user-progress').json['completed'] == 1
+
+        assert client.post('/api/submit-feedback', json=self.feedback_payload()).status_code == 409
+        assert client.post('/api/submit-evaluation', json=self.evaluation_payload()).status_code == 409
+
+    def test_evaluation_then_feedback_both_succeed(self, client):
+        self.login(client)
+
+        evaluation_response = client.post('/api/submit-evaluation', json=self.evaluation_payload())
+        feedback_response = client.post('/api/submit-feedback', json=self.feedback_payload())
+
+        assert evaluation_response.status_code == 200
+        assert feedback_response.status_code == 200
+        assert client.get('/api/user-progress').json['completed'] == 1

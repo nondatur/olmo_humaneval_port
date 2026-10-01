@@ -151,14 +151,17 @@ slowly.
 
 ### Accounts
 
-The `admin` account is created once, on the first run, when `data/evaluation.db` does not yet exist.
-Changing `ADMIN_PASSWORD` afterwards does not update the existing account.
+On startup, the app ensures the database tables exist. If the `admin` account is missing, it is
+created using `ADMIN_PASSWORD`; changing `ADMIN_PASSWORD` afterwards does not update an existing
+account.
 
 Other annotators register themselves: click **Switch to Signup** and supply the username, a password
 of at least 8 characters, and the registration token you share with them. Leave `SIGNUP_TOKEN` unset
 to disable registration entirely once everyone is onboarded.
 
-You can open the app in your browser at http://localhost:5001. When doing the annotation, you can track the progress at the following url: http://localhost:5001/summary.
+Open the app in your browser at http://localhost:5001. Each annotator's completion progress is
+shown on the annotation page. The authenticated `/summary` endpoint reports aggregate progress,
+contributions, and agreement metrics.
 
 ### Endpoints
 
@@ -170,9 +173,9 @@ You can open the app in your browser at http://localhost:5001. When doing the an
 | `/logout` | GET | Session | Logs the current user out |
 | `/instances/<position>` | GET | – | Annotation interface for one instance, by position in the user's ordering |
 | `/api/model-outputs/<position>` | GET | – | Prompt and completions for that position; sides randomised, returns the global `instance_index` |
-| `/api/submit-evaluation` | POST | Session | Stores an acceptance/preference annotation; returns `409` if this user already submitted that instance |
-| `/api/submit-feedback` | POST | Session | Stores instance-quality feedback and comments; returns `409` if this user already submitted that instance |
-| `/api/user-progress` | GET | Session | Returns per-user completion progress: `completed`, `total`, `percentage` |
+| `/api/submit-evaluation` | POST | Session | Stores an acceptance/preference annotation; returns `409` if this user already submitted an evaluation for that instance |
+| `/api/submit-feedback` | POST | Session | Stores instance-quality feedback and comments; returns `409` if this user already submitted feedback for that instance. Feedback and evaluation can both be submitted for one instance. |
+| `/api/user-progress` | GET | Session | Returns per-user completed evaluation progress (feedback is excluded): `completed`, `total`, `percentage` |
 | `/summary` | GET | Session | Progress, contributions and agreement metrics as JSON |
 | `/export_results` | GET | Session | Downloads all annotations as an `.xlsx` file |
 
@@ -223,7 +226,7 @@ container and pushes it to Artifact Registry. Deployment to Cloud Run is a separ
 
 | Stage | When it runs |
 | --- | --- |
-| Test, build, push | Every push to `master` |
+| Test, build, push | Every push to `master` and every closed pull request |
 | Deploy to Cloud Run | Only when a pushed commit message contains `[deploy]`, or when a pull request is merged |
 
 The deploy step mounts a Cloud Storage bucket at `/mnt/gcs` using Cloud Storage FUSE. The image

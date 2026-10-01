@@ -251,8 +251,10 @@ def get_first_unsubmitted_position():
         return 0
     
     order = instance_order()
-    user_records = EvaluationRecord.query.filter_by(evaluator=current_user.username).all()
-    completed_indices = set(record.instance_index for record in user_records)
+    user_records = EvaluationRecord.query.filter_by(
+        evaluator=current_user.username
+    ).filter(EvaluationRecord.preference != "").all()
+    completed_indices = {record.instance_index for record in user_records}
     
     for position, global_index in enumerate(order):
         if global_index not in completed_indices:
@@ -271,7 +273,9 @@ def get_user_progress_payload(username=None):
     if not username:
         return {"completed": 0, "total": total, "percentage": 0}
 
-    user_records = EvaluationRecord.query.filter_by(evaluator=username).all()
+    user_records = EvaluationRecord.query.filter_by(
+        evaluator=username
+    ).filter(EvaluationRecord.preference != "").all()
     completed_indices = {record.instance_index for record in user_records}
     completed = len(completed_indices)
 
@@ -546,13 +550,13 @@ def submit_evaluation():
     if not isinstance(instance_index, int) or not 0 <= instance_index < len(COMPARISON_INSTANCES):
         return jsonify({"error": "Invalid instance index"}), 400
     
-    # Check if user already submitted for this instance
+    # A feedback row for this instance does not prevent its evaluation.
     existing_record = EvaluationRecord.query.filter_by(
         evaluator=current_user.username,
         instance_index=instance_index
-    ).first()
+    ).filter(EvaluationRecord.preference != "").first()
     if existing_record:
-        return jsonify({"error": "You already submitted feedback for this instance. Cannot submit twice."}), 409
+        return jsonify({"error": "You already submitted an evaluation for this instance."}), 409
     
     # write to the database
     new_record = EvaluationRecord(
@@ -586,13 +590,16 @@ def submit_feedback():
     if not isinstance(instance_index, int) or not 0 <= instance_index < len(COMPARISON_INSTANCES):
         return jsonify({"error": "Invalid instance index"}), 400
     
-    # Check if user already submitted for this instance
-    existing_record = EvaluationRecord.query.filter_by(
+    # Feedback and evaluation are separate submissions, but feedback itself is unique.
+    existing_records = EvaluationRecord.query.filter_by(
         evaluator=current_user.username,
         instance_index=instance_index
-    ).first()
-    if existing_record:
-        return jsonify({"error": "You already submitted feedback for this instance. Cannot submit twice."}), 409
+    ).all()
+    if any(
+        record.instance_quality not in (None, "") or record.comment not in (None, "")
+        for record in existing_records
+    ):
+        return jsonify({"error": "You already submitted feedback for this instance."}), 409
     
     # write to the database
     new_record = EvaluationRecord(
