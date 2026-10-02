@@ -10,6 +10,12 @@ The image uses Python 3.11, exposes port `5001`, and starts the app through
 `entrypoint.sh`. The entrypoint waits briefly for `/mnt/gcs` before starting the
 command. In Cloud Run, that path is a Cloud Storage volume mount.
 
+The container serves the app with gunicorn (`--workers 1 --threads 8`), binding
+to `$PORT` when the platform sets it and falling back to `5001`. Gunicorn
+imports the app rather than running `main()`, so the instance file is selected
+with the `COMPARISON_DATA_PATH` environment variable instead of a command-line
+argument.
+
 ## Run Locally
 
 The Dockerfile links `/app/data` to `/mnt/gcs/human-evaluation`. For a local
@@ -28,11 +34,17 @@ docker run --rm \
 Open http://localhost:5001. The local values above are throwaway values only.
 For a local Python run with the same defaults, use `./run_local.sh` instead.
 
+If you keep local fixtures under `test-data`, create `data` as a symlink first so local Docker mounts and local scripts stay consistent:
+
+```bash
+rm -rf data
+ln -s test-data data
+```
+
 ### Use Another Data File
 
-The default container command loads `/app/data/eval_instances_mm_base.jsonl`.
-To select another file, pass the command after the image name; the image
-entrypoint forwards it to the container:
+The image defaults to `COMPARISON_DATA_PATH=/app/data/eval_instances.jsonl`.
+To select another file, override that variable:
 
 ```bash
 docker run --rm \
@@ -41,12 +53,14 @@ docker run --rm \
   -e SECRET_KEY=dev-secret-key \
   -e SIGNUP_TOKEN=dev-signup-token \
   -e ADMIN_PASSWORD=dev-admin-password \
-  human-eval-olmo \
-  python app.py --comparison_data_path /app/data/your_data_file.jsonl \
-    --host 0.0.0.0 --port 5001
+  -e COMPARISON_DATA_PATH=/app/data/your_data_file.jsonl \
+  human-eval-olmo
 ```
 
 ### Debug Mode
+
+Debug mode means the Flask development server, so bypass gunicorn by passing
+the command after the image name; the entrypoint forwards it:
 
 ```bash
 docker run --rm \
@@ -60,6 +74,8 @@ docker run --rm \
     --host 0.0.0.0 --port 5001 --debug
 ```
 
+Never run the development server where annotators can reach it.
+
 ## Environment Variables
 
 | Variable | Required | Purpose |
@@ -68,6 +84,9 @@ docker run --rm \
 | `SIGNUP_TOKEN` | Optional | Token required for account creation. Leave unset to disable signup. |
 | `ADMIN_PASSWORD` | First run | Password for the initial `admin` account. Required when the database is created. |
 | `DATA_PATH` | Optional | Database directory. Defaults to `/app/data` in the image. |
+| `COMPARISON_DATA_PATH` | Optional | Instance `.jsonl` loaded at startup. Defaults to `/app/data/eval_instances.jsonl` in the image. |
+| `EVALUATION_QUESTIONS_PATH` | Optional | Evaluator-facing question config JSON. Defaults to `/app/data/evaluation_questions.json`. |
+| `PORT` | No | Set by Cloud Run; gunicorn binds to it, falling back to `5001`. |
 | `PYTHONDONTWRITEBYTECODE` | No | Set by the Dockerfile to prevent `.pyc` files. |
 | `PYTHONUNBUFFERED` | No | Set by the Dockerfile for immediate log output. |
 | `FLASK_APP` | No | Set by the Dockerfile to `app.py`. |
@@ -83,15 +102,26 @@ configuration. The admin account is created only once; changing
 The GitHub Actions workflow in `.github/workflows/compile_and_test_gcp.yaml`
 runs unit tests, builds the image, and pushes it to Artifact Registry on every
 push to `master`. The Cloud Run deploy step runs only when a push contains
-`[deploy]` in one of its commit messages or when a pull request is closed.
+`[deploy]` in one of its commit messages or when a pull request is merged.
 
 The deploy command:
 
 - uses the second-generation execution environment;
 - allows unauthenticated network access, with Flask login providing application authentication;
 - limits the service to one instance because SQLite is stored on the mounted volume;
+- pins resources to `--memory=2Gi`, `--cpu=2`, and `--concurrency=16`;
+- deploys with the explicit runtime identity `cicd-sa@steel-wall-436909-g7.iam.gserviceaccount.com`;
 - mounts the bucket at `/mnt/gcs`;
 - maps `/app/data` to the `human-evaluation` folder inside that bucket.
+
+The single-instance limit and gunicorn's single worker are the same constraint
+seen from two sides. Cloud Storage FUSE offers no POSIX file locking and
+replaces the whole object when a file is closed, so two processes writing
+`evaluation.db` would overwrite each other's annotations without error. Exactly
+one writer must exist, which is also why SQLAlchemy uses `NullPool`: closing the
+connection after each request is what pushes the commit into the bucket.
+Raising `--max-instances` or `--workers` requires moving the database to Cloud
+SQL first.
 
 The following secrets must exist in the GitHub `docker-env` environment:
 
@@ -104,8 +134,9 @@ The following secrets must exist in the GitHub `docker-env` environment:
 | `SIGNUP_TOKEN` | Registration token for annotators |
 | `ADMIN_PASSWORD` | Initial admin account password |
 
-The Cloud Run runtime service account needs `roles/storage.objectUser` on the
-bucket because the app writes `evaluation.db` and annotation records there.
+The Cloud Run runtime service account needs object-level write permissions on
+the bucket (for example `roles/storage.objectAdmin`) because the app writes
+`evaluation.db` and annotation records there.
 
 ## Docker Compose
 

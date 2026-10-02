@@ -10,6 +10,8 @@ ENV PYTHONUNBUFFERED=1
 ENV FLASK_APP=app.py
 ENV FLASK_ENV=production
 ENV DATA_PATH=/app/data
+ENV COMPARISON_DATA_PATH=/app/data/eval_instances.jsonl
+ENV EVALUATION_QUESTIONS_PATH=/app/data/evaluation_questions.json
 
 # Copy requirements first to leverage Docker cache
 COPY requirements.txt .
@@ -17,7 +19,7 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip --timeout=1000 install --trusted-host pypi.python.org --trusted-host pypi.org --trusted-host=files.pythonhosted.org --no-cache-dir -r requirements.txt
 
-# Copy application code (excluding data directory which will be mounted)
+# Copy application code; runtime mounts can overlay /app/data
 COPY . /app
 
 # Ensure data directory exists for GCS mount
@@ -34,5 +36,6 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5001/')" || exit 1
 
 # Default command - uses environment variable for data path
+# Single worker: SQLite lives on a GCS FUSE mount, which cannot arbitrate writes between processes
 ENTRYPOINT [ "/app/entrypoint.sh" ]
-CMD ["python", "app.py", "--comparison_data_path", "/app/data/eval_instances.jsonl", "--host", "0.0.0.0", "--port", "5001"]
+CMD ["sh", "-c", "exec gunicorn --bind 0.0.0.0:${PORT:-5001} --workers 1 --threads 8 --timeout 120 --access-logfile - app:app"]

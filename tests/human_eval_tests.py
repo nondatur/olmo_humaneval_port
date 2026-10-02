@@ -4,11 +4,17 @@ import pytest
 from unittest.mock import patch, mock_open
 from werkzeug.security import generate_password_hash
 
+
+def _test_password_hash(password: str) -> str:
+    """Stable test hash method across OpenSSL/Python builds."""
+    return generate_password_hash(password, method='pbkdf2:sha256')
+
 # Import the Flask app and models
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app import app, db, User, EvaluationRecord
+from app import app, db, EVALUATION_QUESTIONS, User, EvaluationRecord
+import app as app_module
 
 
 @pytest.fixture(autouse=True)
@@ -19,8 +25,8 @@ def app_config():
     with app.app_context():
         db.drop_all()
         db.create_all()
-        test_user = User(username='testuser', password=generate_password_hash('testpass'))
-        admin_user = User(username='admin', password=generate_password_hash('admin'))
+        test_user = User(username='testuser', password=_test_password_hash('testpass'))
+        admin_user = User(username='admin', password=_test_password_hash('admin'))
         db.session.add(test_user)
         db.session.add(admin_user)
         db.session.commit()
@@ -115,7 +121,7 @@ class TestDatabaseIntegrity:
     def test_user_model_creation(self):
         """Test User model creation and properties."""
         with app.app_context():
-            user = User(username='testmodel', password=generate_password_hash('testpass'))
+            user = User(username='testmodel', password=_test_password_hash('testpass'))
             db.session.add(user)
             db.session.commit()
             
@@ -208,6 +214,14 @@ class TestAnnotationFunctions:
 
 class TestAppInitialization:
     """Test application initialization and configuration."""
+
+    def test_instance_page_displays_configured_questions(self, client):
+        """Question copy comes from the startup-loaded configuration file."""
+        response = client.get('/instances/0')
+
+        assert response.status_code == 200
+        assert EVALUATION_QUESTIONS['acceptance_question_a'].encode() in response.data
+        assert b'name="a-is-acceptable"' in response.data
     
     def test_app_configuration(self):
         """Test basic app configuration."""
@@ -229,3 +243,67 @@ class TestAppInitialization:
                     # The test ensures the data loading part works
                 except SystemExit:
                     pass  # main() calls sys.exit(), which is expected in testing
+
+
+class TestSubmissionFlow:
+    """Evaluation and optional feedback can both be recorded once per instance."""
+
+    @pytest.fixture(autouse=True)
+    def comparison_data(self, sample_comparison_data, monkeypatch):
+        monkeypatch.setattr(app_module, 'COMPARISON_INSTANCES', sample_comparison_data)
+
+    def login(self, client):
+        response = client.post('/login', data={
+            'username': 'testuser',
+            'password': 'testpass'
+        })
+        assert response.status_code == 302
+
+    def feedback_payload(self):
+        return {
+            'index': 0,
+            'model_a': 'model_a',
+            'model_b': 'model_b',
+            'prompt': 'Test prompt',
+            'completion_a': 'Response A',
+            'completion_b': 'Response B',
+            'instance_quality': 'good',
+            'comment': 'Useful example',
+        }
+
+    def evaluation_payload(self):
+        return {
+            'index': 0,
+            'model_a': 'model_a',
+            'model_b': 'model_b',
+            'prompt': 'Test prompt',
+            'completion_a': 'Response A',
+            'completion_b': 'Response B',
+            'completion_a_is_acceptable': 'yes',
+            'completion_b_is_acceptable': 'no',
+            'preference': 'a-is-better',
+        }
+
+    def test_feedback_then_evaluation_both_succeed_and_progress_counts_evaluation(self, client):
+        self.login(client)
+
+        feedback_response = client.post('/api/submit-feedback', json=self.feedback_payload())
+        assert feedback_response.status_code == 200
+        assert client.get('/api/user-progress').json['completed'] == 0
+
+        evaluation_response = client.post('/api/submit-evaluation', json=self.evaluation_payload())
+        assert evaluation_response.status_code == 200
+        assert client.get('/api/user-progress').json['completed'] == 1
+
+        assert client.post('/api/submit-feedback', json=self.feedback_payload()).status_code == 409
+        assert client.post('/api/submit-evaluation', json=self.evaluation_payload()).status_code == 409
+
+    def test_evaluation_then_feedback_both_succeed(self, client):
+        self.login(client)
+
+        evaluation_response = client.post('/api/submit-evaluation', json=self.evaluation_payload())
+        feedback_response = client.post('/api/submit-feedback', json=self.feedback_payload())
+
+        assert evaluation_response.status_code == 200
+        assert feedback_response.status_code == 200
+        assert client.get('/api/user-progress').json['completed'] == 1

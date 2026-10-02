@@ -1,23 +1,25 @@
 import argparse
+import hashlib
 import json
 import os
 import random
 import secrets
 import time, sqlite3
+from collections import Counter
+from contextlib import closing
+from functools import lru_cache
 from io import BytesIO
 import pandas as pd
-from collections import Counter
 
 from flask import Flask, abort, jsonify, redirect, render_template, request, url_for, make_response
 from flask_login import LoginManager, UserMixin, current_user, login_required, login_user, logout_user
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.pool import NullPool
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import logging
 log = logging.getLogger('human-eval')
-
-random.seed(42)
 
 app = Flask(__name__)
 
@@ -25,7 +27,11 @@ app = Flask(__name__)
 DATA_DIR = os.environ.get('DATA_PATH', os.path.join(os.getcwd(), 'data'))
 os.makedirs(DATA_DIR, exist_ok=True)
 
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(DATA_DIR, 'evaluation.db')
+DB_PATH = os.path.join(DATA_DIR, 'evaluation.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + DB_PATH
+# The database lives on a Cloud Storage FUSE mount, which only uploads a file when it is
+# closed; pooled connections would keep committed rows staged locally and never persisted.
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'poolclass': NullPool}
 log.info(app.config['SQLALCHEMY_DATABASE_URI'])
 
 SECRET_KEY = os.environ.get('SECRET_KEY')
@@ -46,7 +52,64 @@ login_manager.init_app(app)
 # GLOBAL VARIABLE for the comparison instances
 COMPARISON_INSTANCES=[]
 
-APP_VERSION = "v1.0.1"
+APP_VERSION = "v1.1.1"
+
+DEFAULT_QUESTIONS_CONFIG_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "data", "evaluation_questions.json"
+)
+QUESTIONS_CONFIG_PATH = os.environ.get(
+    "EVALUATION_QUESTIONS_PATH", DEFAULT_QUESTIONS_CONFIG_PATH
+)
+REQUIRED_QUESTION_KEYS = {
+    "feedback_question",
+    "evaluation_intro",
+    "acceptance_question_a",
+    "acceptance_question_b",
+    "preference_question",
+}
+
+
+def load_evaluation_questions(config_path):
+    """Read the evaluator-facing question text without changing answer values."""
+    try:
+        with open(config_path, "r", encoding="utf-8") as config_file:
+            questions = json.load(config_file)
+    except (OSError, json.JSONDecodeError) as error:
+        raise RuntimeError(
+            f"Could not load evaluation questions from {config_path}: {error}"
+        ) from error
+
+    if not isinstance(questions, dict):
+        raise RuntimeError("Evaluation questions configuration must be a JSON object.")
+
+    missing_keys = REQUIRED_QUESTION_KEYS - questions.keys()
+    invalid_keys = [key for key in REQUIRED_QUESTION_KEYS if not isinstance(questions.get(key), str)]
+    if missing_keys or invalid_keys:
+        details = []
+        if missing_keys:
+            details.append("missing: " + ", ".join(sorted(missing_keys)))
+        if invalid_keys:
+            details.append("must be strings: " + ", ".join(sorted(invalid_keys)))
+        raise RuntimeError("Invalid evaluation questions configuration (" + "; ".join(details) + ").")
+
+    # Add optional button labels with defaults
+    defaults = {
+        "preference_label_a_clearly_better": "A is clearly better",
+        "preference_label_a_slightly_better": "A is slightly better",
+        "preference_label_tie": "Tie",
+        "preference_label_b_slightly_better": "B is slightly better",
+        "preference_label_b_clearly_better": "B is clearly better",
+    }
+    for key, default_value in defaults.items():
+        if key not in questions:
+            questions[key] = default_value
+        elif not isinstance(questions[key], str):
+            questions[key] = default_value
+
+    return questions
+
+
+EVALUATION_QUESTIONS = load_evaluation_questions(QUESTIONS_CONFIG_PATH)
 
 
 @app.context_processor
@@ -91,7 +154,9 @@ def login():
         user = User.query.filter_by(username=username).first()
         if user and check_password_hash(user.password, password):
             login_user(user)
-            return redirect(url_for('index'))
+            # Redirect to first unsubmitted instance
+            first_pos = get_first_unsubmitted_position()
+            return redirect(url_for('instances', index=first_pos))
         else:
             return 'Invalid username or password'
     else:
@@ -141,23 +206,111 @@ def logout():
 def index():
     # check if the user is logged in
     if current_user.is_authenticated:
-        return redirect(url_for('instances', index=0, current_user=current_user))
+        first_pos = get_first_unsubmitted_position()
+        return redirect(url_for('instances', index=first_pos, current_user=current_user))
     else:
         return redirect(url_for('login'))
 
 
 @app.route('/instances/<int:index>')
 def instances(index):
-    return render_template('index.html', index=index, current_user=current_user)
+    progress = get_user_progress_payload(current_user.username if current_user.is_authenticated else None)
+    return render_template(
+        'index.html',
+        index=index,
+        current_user=current_user,
+        questions=EVALUATION_QUESTIONS,
+        progress=progress,
+    )
 
 
-@app.route("/api/model-outputs/<int:index>", methods=["GET"])
-def get_model_outputs(index):
-    if 0 <= index < len(COMPARISON_INSTANCES):
-        prompt = COMPARISON_INSTANCES[index]["prompt"]
-        completions = COMPARISON_INSTANCES[index]["completions"]
-        random.shuffle(completions)
-        return jsonify({"prompt": prompt, "completions": completions}), 200
+def _stable_seed(*parts):
+    raw = "\x1f".join(str(part) for part in parts).encode("utf-8")
+    return int.from_bytes(hashlib.sha256(raw).digest()[:8], "big")
+
+
+def _user_key():
+    return current_user.username if current_user.is_authenticated else "anonymous"
+
+
+@lru_cache(maxsize=None)
+def _instance_order(user_key, num_instances):
+    order = list(range(num_instances))
+    random.Random(_stable_seed("order", user_key)).shuffle(order)
+    return order
+
+
+def instance_order():
+    """Global instance indices in the order this user should evaluate them."""
+    return _instance_order(_user_key(), len(COMPARISON_INSTANCES))
+
+
+def get_first_unsubmitted_position():
+    """Get the position in the user's personal ordering of the first unsubmitted instance."""
+    if not current_user.is_authenticated:
+        return 0
+    
+    order = instance_order()
+    user_records = EvaluationRecord.query.filter_by(
+        evaluator=current_user.username
+    ).filter(EvaluationRecord.preference != "").all()
+    completed_indices = {record.instance_index for record in user_records}
+    
+    for position, global_index in enumerate(order):
+        if global_index not in completed_indices:
+            return position
+    
+    if not order:
+        return 0
+
+    # All instances completed, return last position
+    return len(order) - 1
+
+
+def get_user_progress_payload(username=None):
+    """Compute user progress with unique instance counts and bounded percentage."""
+    total = len(COMPARISON_INSTANCES)
+    if not username:
+        return {"completed": 0, "total": total, "percentage": 0}
+
+    user_records = EvaluationRecord.query.filter_by(
+        evaluator=username
+    ).filter(EvaluationRecord.preference != "").all()
+    completed_indices = {record.instance_index for record in user_records}
+    completed = len(completed_indices)
+
+    if total == 0:
+        percentage = 0
+    else:
+        percentage = int((completed / total) * 100)
+        percentage = max(0, min(100, percentage))
+
+    return {
+        "completed": completed,
+        "total": total,
+        "percentage": percentage,
+    }
+
+
+def ordered_completions(instance):
+    """Copy of the completions, side-swapped at random on every view."""
+    completions = list(instance["completions"])
+    if random.random() < 0.5:
+        completions.reverse()
+    return completions
+
+
+@app.route("/api/model-outputs/<int:position>", methods=["GET"])
+def get_model_outputs(position):
+    order = instance_order()
+    if 0 <= position < len(order):
+        instance = COMPARISON_INSTANCES[order[position]]
+        return jsonify({
+            "prompt": instance["prompt"],
+            "completions": ordered_completions(instance),
+            "instance_index": order[position],
+            "total": len(order),
+        }), 200
     return jsonify({"error": "Index out of range"}), 200
 
 
@@ -172,13 +325,9 @@ def summary():
 @login_required
 def export():
 
-    # Database connection
-    DATABASE = "data/evaluation.db"
-    DB_CONN = sqlite3.connect(DATABASE, check_same_thread=False)
-    #DB_CURSOR = DB_CONN.cursor()
-
     # Export the evaluation results as excel
-    df = pd.read_sql_query("SELECT * from evaluation_record", DB_CONN)
+    with closing(sqlite3.connect(DB_PATH)) as conn:
+        df = pd.read_sql_query("SELECT * from evaluation_record", conn)
 
     # Write Excel file to an in-memory buffer
     output = BytesIO()
@@ -397,10 +546,22 @@ def submit_evaluation():
     evaluation_data = request.get_json()
     log.info("Got new evaluation data:")
     log.info(evaluation_data)
+    instance_index = evaluation_data["index"]
+    if not isinstance(instance_index, int) or not 0 <= instance_index < len(COMPARISON_INSTANCES):
+        return jsonify({"error": "Invalid instance index"}), 400
+    
+    # A feedback row for this instance does not prevent its evaluation.
+    existing_record = EvaluationRecord.query.filter_by(
+        evaluator=current_user.username,
+        instance_index=instance_index
+    ).filter(EvaluationRecord.preference != "").first()
+    if existing_record:
+        return jsonify({"error": "You already submitted an evaluation for this instance."}), 409
+    
     # write to the database
     new_record = EvaluationRecord(
-        instance_index=evaluation_data["index"],
-        instance_id=COMPARISON_INSTANCES[evaluation_data["index"]]["id"],
+        instance_index=instance_index,
+        instance_id=COMPARISON_INSTANCES[instance_index]["id"],
         prompt=evaluation_data["prompt"],
         model_a=evaluation_data["model_a"],
         model_b=evaluation_data["model_b"],
@@ -411,7 +572,7 @@ def submit_evaluation():
         preference=evaluation_data["preference"],
         instance_quality="",
         comment="",
-        evaluator=evaluation_data["evaluator"],
+        evaluator=current_user.username,
         timestamp=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
     )
     db.session.add(new_record)
@@ -425,10 +586,25 @@ def submit_feedback():
     feedback_data = request.get_json()
     log.info("Got new feedback:")
     log.info(feedback_data)
+    instance_index = feedback_data["index"]
+    if not isinstance(instance_index, int) or not 0 <= instance_index < len(COMPARISON_INSTANCES):
+        return jsonify({"error": "Invalid instance index"}), 400
+    
+    # Feedback and evaluation are separate submissions, but feedback itself is unique.
+    existing_records = EvaluationRecord.query.filter_by(
+        evaluator=current_user.username,
+        instance_index=instance_index
+    ).all()
+    if any(
+        record.instance_quality not in (None, "") or record.comment not in (None, "")
+        for record in existing_records
+    ):
+        return jsonify({"error": "You already submitted feedback for this instance."}), 409
+    
     # write to the database
     new_record = EvaluationRecord(
-        instance_index=feedback_data["index"],
-        instance_id=COMPARISON_INSTANCES[feedback_data["index"]]["id"],
+        instance_index=instance_index,
+        instance_id=COMPARISON_INSTANCES[instance_index]["id"],
         prompt=feedback_data["prompt"],
         model_a=feedback_data["model_a"],
         model_b=feedback_data["model_b"],
@@ -439,12 +615,50 @@ def submit_feedback():
         preference="",
         instance_quality=feedback_data["instance_quality"],
         comment=feedback_data["comment"],
-        evaluator=feedback_data["evaluator"],
+        evaluator=current_user.username,
         timestamp=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
     )
     db.session.add(new_record)
     db.session.commit()
     return jsonify({"message": "Evaluation data submitted successfully"}), 200
+
+
+@app.route("/api/user-progress", methods=["GET"])
+@login_required
+def get_user_progress():
+    """Return the current user's evaluation progress."""
+    return jsonify(get_user_progress_payload(current_user.username)), 200
+
+
+def bootstrap_database():
+    with app.app_context():
+        db.create_all()
+        if not User.query.filter_by(username="admin").first():
+            admin_password = os.environ.get('ADMIN_PASSWORD')
+            if not admin_password:
+                raise SystemExit("ADMIN_PASSWORD is not set; refusing to create the admin account.")
+            new_user = User(
+                username="admin",
+                password=generate_password_hash(admin_password, method='pbkdf2')
+            )
+            db.session.add(new_user)
+            db.session.commit()
+
+
+def init_app(comparison_data_path):
+    """Prepare the database and load the comparison instances; must run before serving."""
+    bootstrap_database()
+
+    global COMPARISON_INSTANCES
+    with open(comparison_data_path, "r") as f:
+        COMPARISON_INSTANCES = [json.loads(line.strip()) for line in f.readlines()]
+
+    log.info("Total number of comparison instances: {}".format(len(COMPARISON_INSTANCES)))
+
+
+# Gunicorn imports this module instead of calling main(), so initialise here when configured.
+if os.environ.get("COMPARISON_DATA_PATH"):
+    init_app(os.environ["COMPARISON_DATA_PATH"])
 
 
 def main():
@@ -475,25 +689,14 @@ def main():
     )
     args = parser.parse_args()
 
-    if not os.path.exists(os.path.join(DATA_DIR, 'evaluation.db')):
-        admin_password = os.environ.get('ADMIN_PASSWORD')
-        if not admin_password:
-            raise SystemExit("ADMIN_PASSWORD is not set; refusing to create the admin account.")
-        with app.app_context():
-            db.create_all()
-            new_user = User(username="admin", password=generate_password_hash(admin_password))
-            db.session.add(new_user)
-            db.session.commit()
-
-    # load the predictions
-    global COMPARISON_INSTANCES
-    with open(args.comparison_data_path, "r") as f:
-        COMPARISON_INSTANCES = [json.loads(line.strip()) for line in f.readlines()]
-
-    log.info("Total number of comparison instances: {}".format(len(COMPARISON_INSTANCES)))
+    init_app(args.comparison_data_path)
 
     # run the app and listen on port 5000
     app.run(host=args.host, port=args.port, debug=args.debug)
+
+
+if __name__ == '__main__':
+    main()
 
 
 if __name__ == '__main__':

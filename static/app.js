@@ -1,5 +1,7 @@
-// Global variable to store the current index
+// Position in this user's personal ordering of the instances
 let current_index = instance_index;
+// Global index of the instance currently displayed (what gets stored in the database)
+let current_instance_index = null;
 
 // Fetch the initial model outputs based on the instance index
 rendere_instance(current_index);
@@ -18,11 +20,12 @@ async function rendere_instance(index) {
             timeout=1e10 // set timeout to a very large number so that the alert doesn't disappear
         );
         clear_all();
+        current_instance_index = null;
         return;
     }
 
     clear_all();
-    $("#instance-id").html(`Instance ${index}`);
+    current_instance_index = data.instance_index;
 
     // let's use a unified format here that support multiple messages, though currently we only have one user prompt.
     var messages = [{"role": "user", "text": data.prompt}];
@@ -34,7 +37,7 @@ async function rendere_instance(index) {
 
         var $message_element = $("<div></div>").addClass("row").html(`
             <div class="col icon-col">
-                <button class="role-icon">${icon}</button>
+                <button class="role-icon" disabled>${icon}</button>
             </div>
             <div class="col message-col history-message-col">
                 <xmp class="message-text">${message.text}</xmp>
@@ -65,7 +68,7 @@ function clear_all() {
     $('#history-message-region').html(`
         <div class="row">
             <div class="col icon-col">
-                <button class="role-icon">🧑</button>
+                <button class="role-icon" disabled>🧑</button>
             </div>
             <div class="col message-col history-message-col">
                 <xmp class="message-text"></xmp>
@@ -111,7 +114,7 @@ async function submit_evaluation() {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                index: current_index,
+                index: current_instance_index,
                 model_a,
                 model_b,
                 prompt,
@@ -128,8 +131,20 @@ async function submit_evaluation() {
         if (response.status == 200) {
             show_alert("Evaluation data is submitted successfully.", "success", insert_after_selector="#evaluation-submit", timeoutput=5000);
             console.log("Evaluation data is submitted successfully.");
-            current_index++;
-            rendere_instance(current_index);
+            updateProgressBar();
+            // Only move to next instance after submit
+            setTimeout(() => {
+                current_index++;
+                rendere_instance(current_index);
+                updateProgressBarAsync();
+            }, 500);
+        }
+        else if (response.status == 409) {
+            show_alert("You already submitted feedback for this instance. Moving to next...", "warning", insert_after_selector="#evaluation-submit", timeoutput=5000);
+            setTimeout(() => {
+                current_index++;
+                rendere_instance(current_index);
+            }, 1500);
         }
         else if (response.status == 401) {
             show_alert("You need to log in to submit evaluation data.", "danger", insert_after_selector="#evaluation-submit", timeoutput=5000);
@@ -182,7 +197,7 @@ async function submit_feedback() {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                index: current_index,
+                index: current_instance_index,
                 model_a,
                 model_b,
                 prompt,
@@ -219,17 +234,48 @@ $("#feedback-submit").click(function () {
     submit_feedback();
 });
 
-// Add event listeners for the navigation buttons
-$('#prev-button').click(function () {
-    if (current_index > 0) {
-        // redirect to the previous instance using url
-        window.location.href = `/instances/${current_index - 1}`;
-    } else {
-        show_alert("You are already on the first instance.", "danger");
-    }
-});
+// Navigation is now forward-only - prev button is disabled in template
+// Users can only move forward through instances via Submit button
 
-$("#next-button").click(function () {
-    // redirect to the next instance using url
-    window.location.href = `/instances/${current_index + 1}`;
+// Function to update the progress bar
+async function updateProgressBar() {
+    try {
+        const response = await fetch('/api/user-progress');
+        if (response.status !== 200) {
+            return;
+        }
+        const data = await response.json();
+        
+        const percentage = Math.max(0, Math.min(100, Number(data.percentage) || 0));
+        const completed = Number(data.completed) || 0;
+        const total = Number(data.total) || 0;
+
+        // Update progress bar
+        $('#progress-bar')
+            .css('width', percentage + '%')
+            .attr('aria-valuenow', percentage)
+            .text(`${percentage}%`);
+
+        // Update progress text
+        $('#progress-text').text(`Completed evaluations: ${completed} / ${total}`);
+
+        // Update progress bar background color based on completion
+        if (percentage === 100) {
+            $('#progress-bar').addClass('bg-success').removeClass('bg-primary');
+        } else {
+            $('#progress-bar').addClass('bg-primary').removeClass('bg-success');
+        }
+    } catch (error) {
+        console.error("Error fetching progress:", error);
+    }
+}
+
+// Update progress bar after instance is loaded (non-blocking)
+function updateProgressBarAsync() {
+    updateProgressBar().catch(err => console.log("Progress bar update failed, but that's OK"));
+}
+
+// Update progress bar when page loads (non-blocking)
+$(document).ready(function() {
+    setTimeout(updateProgressBarAsync, 500); // Small delay to ensure instance is loaded
 });

@@ -7,8 +7,13 @@ html {
 xmp {
     font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Rows with icons should vertically center the columns */
+.row {
+    align-items: center;
+}
 #nav {
-    padding: 50px;
+    padding: 20px 50px 50px 50px;
     border-radius: 5px;
     background-color: aliceblue;
     min-height: 100vh;
@@ -35,13 +40,17 @@ xmp {
     color: #6c757d;
     pointer-events: none;
 }
+#title {
+    font-size: 2.5rem;
+    font-weight: normal;
+}
 #history-message-region {
     padding: 20px;
     border-radius: 5px;
     margin: 10px 10px 10px 0;
     background: oldlace;
-    height: 25vh;
-    min-height: 150px;
+    height: 15vh;
+    min-height: 100px;
     overflow: auto;
     resize: vertical;
 }
@@ -62,17 +71,29 @@ xmp {
 }
 .icon-col {
     max-width: 70px;
+    margin-right: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 .role-icon {
     border-radius: 50%;
-    width: 50px;
-    height: 50px;
-    font-size: 20px;
+    width: 70px;
+    height: 70px;
+    font-size: 2.5em;
     border: 1px solid #ddd;
     background-color: white;
+    cursor: default;
+    pointer-events: none;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 .message-col {
-    padding-top: 10px;
+    padding-top: 0;
+    display: flex;
+    align-items: center;
 }
 .message-text {
     font-size: 18px;
@@ -96,11 +117,89 @@ xmp {
     padding: 10px;
     margin: 15px;
     background-color: white;
-    height: 50vh;
+    height: 30vh;
     overflow: auto;
-    min-height: 200px;
+    min-height: 150px;
     resize: vertical;
 }
 .eval-form-item {
+    margin-bottom: 40px;
+}
+
+/* Progress bar styling */
+#instance-info {
+    width: 100%;
+    margin-bottom: 10px;
+    padding: 15px 0;
+    display: block !important;
+    visibility: visible !important;
+    border-bottom: 2px solid #3e4cf1;
+    background-color: rgba(62, 76, 241, 0.05);
+}
+
+#instance-info .col-12 {
+    display: block;
+}
+
+#progress-bar {
+    background-color: #3e4cf1;
+    transition: width 0.3s ease;
+    display: block;
+    min-width: 5px;
+    min-height: 30px;
+    color: white;
+    font-weight: bold;
+    line-height: 30px;
+    text-align: center;
+    font-size: 0.9em;
+}
+
+.progress {
+    height: 25px;
+    border-radius: 5px;
+    background-color: #f0f0f0;
+    display: block;
+    border: 1px solid #ddd;
+}
+
+#progress-text {
+    display: block;
+    margin-top: 8px;
     margin-bottom: 20px;
+    text-align: center;
+}
+
+#nav > form {
+    margin-top: 20px;
+}
+
+/* Larger form controls for better usability */
+.form-check-input {
+    width: 1.3em;
+    height: 1.3em;
+    margin-top: 0.3em;
+}
+
+.form-check-label {
+    padding-left: 0.5em;
+    font-size: 1.05em;
+}
+
+.form-check-inline {
+    margin-right: 1.5em;
+}
+
+/* Center the preference button group */
+.btn-group[role="group"] {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.5em;
+}
+
+/* Style question labels - only strong tags (Optional and Q1/Q2/Q3) */
+.form-group p strong {
+    font-size: 1.15em;
+    font-weight: bold;
+}
 }

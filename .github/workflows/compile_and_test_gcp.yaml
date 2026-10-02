@@ -23,6 +23,9 @@ env:
   GCS_BUCKET: ${{ secrets.GCS_BUCKET }}
   GCS_MOUNT_PATH: /mnt/gcs
   SERVICE_PORT: 5001
+  SERVICE_MEMORY: 2Gi
+  SERVICE_CPU: 2
+  SERVICE_CONCURRENCY: 16
   SECRET_KEY: ${{ secrets.SECRET_KEY }}
   SIGNUP_TOKEN: ${{ secrets.SIGNUP_TOKEN }}
   ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
@@ -108,9 +111,13 @@ jobs:
             --region=${{ env.GCP_REGION }} \
             --project=${{ env.GCP_PROJECT }} \
             --port=${{ env.SERVICE_PORT }} \
+            --memory=${{ env.SERVICE_MEMORY }} \
+            --cpu=${{ env.SERVICE_CPU }} \
+            --concurrency=${{ env.SERVICE_CONCURRENCY }} \
             --execution-environment=gen2 \
             --allow-unauthenticated \
             --max-instances=1 \
+            --max=1 \
             --update-env-vars="^@^SECRET_KEY=${{ env.SECRET_KEY }}@SIGNUP_TOKEN=${{ env.SIGNUP_TOKEN }}@ADMIN_PASSWORD=${{ env.ADMIN_PASSWORD }}" \
             --service-account=${{ env.GCP_RUNTIME_SA }} \
             --add-volume=name=gcs-data,type=cloud-storage,bucket=${{ env.GCS_BUCKET }} \
