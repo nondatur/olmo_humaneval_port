@@ -52,10 +52,10 @@ login_manager.init_app(app)
 # GLOBAL VARIABLE for the comparison instances
 COMPARISON_INSTANCES=[]
 
-APP_VERSION = "v1.1.1"
+APP_VERSION = "v1.2.0"
 
 DEFAULT_QUESTIONS_CONFIG_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "data", "evaluation_questions.json"
+    os.path.dirname(os.path.abspath(__file__)), "static", "evaluation_questions.json"
 )
 QUESTIONS_CONFIG_PATH = os.environ.get(
     "EVALUATION_QUESTIONS_PATH", DEFAULT_QUESTIONS_CONFIG_PATH
